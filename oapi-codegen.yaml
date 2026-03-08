@@ -1,5 +1,8 @@
-package: api
+package: api 
 generate:
   models: true
-  chi-server: true
+  client: true
+  std-http-server: true
 output: internal/api/remote_signing.gen.go
+import-mapping:
+  ../schemas.yaml: "-" 
