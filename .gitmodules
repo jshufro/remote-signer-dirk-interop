@@ -1,0 +1,3 @@
+[submodule "remote-signing-api"]
+	path = remote-signing-api
+	url = https://github.com/ethereum/remote-signing-api.git
