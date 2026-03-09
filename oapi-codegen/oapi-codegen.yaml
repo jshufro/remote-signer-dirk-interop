@@ -6,3 +6,4 @@ generate:
 output: internal/api/remote_signing.gen.go
 import-mapping:
   ../schemas.yaml: "-" 
+output-options:
