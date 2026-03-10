@@ -1,0 +1,32 @@
+name: Generate check
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.1"
+
+      - name: Run generate
+        run: make generate
+
+      - name: Fail if generate produced a diff
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::make generate produced uncommitted changes. Run 'make generate' and commit the result."
+            git status --porcelain
+            git diff
+            exit 1
+          fi
