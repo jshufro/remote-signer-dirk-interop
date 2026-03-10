@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/herumi/bls-eth-go-binary/bls"
@@ -18,7 +17,6 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner/accountcache"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
-	"github.com/rs/zerolog"
 	"google.golang.org/grpc/credentials"
 
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -274,19 +272,4 @@ func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [4
 	d.log.Debug("signed validator registration", "pubkey", hex.EncodeToString(pubkey[:]),
 		"fee recipient", hex.EncodeToString(feeRecipient[:]))
 	return returnSignature(signature)
-}
-
-func slogLevelToZerologLevel(level slog.Level) zerolog.Level {
-	switch level {
-	case slog.LevelDebug:
-		return zerolog.DebugLevel
-	case slog.LevelInfo:
-		return zerolog.InfoLevel
-	case slog.LevelWarn:
-		return zerolog.WarnLevel
-	case slog.LevelError:
-		return zerolog.ErrorLevel
-	}
-	fmt.Fprintf(os.Stderr, "invalid zerolog level %d, defaulting to trace\n", level)
-	return zerolog.TraceLevel
 }

@@ -2,11 +2,15 @@ package dirksigner
 
 import (
 	"encoding/hex"
+	"fmt"
+	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
+	"github.com/rs/zerolog"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 )
 
@@ -45,4 +49,19 @@ func returnSignature(signature e2types.Signature) ([96]byte, *errors.SignerError
 		return [96]byte{}, errors.ErrInternalServerError
 	}
 	return [96]byte(b), nil
+}
+
+func slogLevelToZerologLevel(level slog.Level) zerolog.Level {
+	switch level {
+	case slog.LevelDebug:
+		return zerolog.DebugLevel
+	case slog.LevelInfo:
+		return zerolog.InfoLevel
+	case slog.LevelWarn:
+		return zerolog.WarnLevel
+	case slog.LevelError:
+		return zerolog.ErrorLevel
+	}
+	fmt.Fprintf(os.Stderr, "invalid zerolog level %d, defaulting to trace\n", level)
+	return zerolog.TraceLevel
 }
