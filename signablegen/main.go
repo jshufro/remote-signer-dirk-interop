@@ -224,6 +224,5 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	fmt.Fprintf(f, "\t\treturn [96]byte{}, fmt.Errorf(\"unknown signable type: %%T\", signable)\n")
 	fmt.Fprintln(f, "\t}")
 	fmt.Fprintln(f, "}")
-	fmt.Fprintln(f)
 	return nil
 }

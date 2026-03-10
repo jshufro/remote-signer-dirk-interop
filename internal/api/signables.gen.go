@@ -91,4 +91,3 @@ func Sign(ctx context.Context, signer Signer, signable any) ([96]byte, error) {
 		return [96]byte{}, fmt.Errorf("unknown signable type: %T", signable)
 	}
 }
-
