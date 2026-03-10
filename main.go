@@ -132,6 +132,7 @@ func main() {
 	}
 
 	service.SetLogger(log)
+	service.SetTimeout(cfg.Dirk.Timeout)
 
 	server := http.Server{
 		Handler: api.Handler(service),

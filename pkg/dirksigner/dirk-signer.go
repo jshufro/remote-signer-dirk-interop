@@ -19,6 +19,7 @@ type DirkSigner struct {
 	wallet      e2wt.Wallet
 	endpoints   []*e2wd.Endpoint
 	walletName  string
+	rootCA      *x509.CertPool
 	tlsProvider *tlsprovider.TLSProvider
 }
 
@@ -36,6 +37,7 @@ func NewDirkSigner(endpoints []*e2wd.Endpoint, wallet string, rootCA *x509.CertP
 	return &DirkSigner{
 		endpoints:   endpoints,
 		walletName:  wallet,
+		rootCA:      rootCA,
 		tlsProvider: tlsProvider,
 	}
 }
@@ -49,6 +51,9 @@ func (d *DirkSigner) Open(ctx context.Context) error {
 			}
 			return cert, nil
 		},
+	}
+	if d.rootCA != nil {
+		tlsConfig.RootCAs = d.rootCA
 	}
 	credentials := credentials.NewTLS(tlsConfig)
 	var err error
