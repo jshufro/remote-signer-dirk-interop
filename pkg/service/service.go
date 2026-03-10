@@ -132,10 +132,10 @@ func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string
 	}
 
 	// Sign the object
-	signature, err := api.Sign(ctx, s.signer, pubkey, signable)
-	if err != nil {
-		s.log.Error("failed to sign object", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+	signature, signerErr := api.Sign(ctx, s.signer, pubkey, signable)
+	if signerErr != nil {
+		s.log.Error("failed to sign object", "error", signerErr.Error())
+		w.WriteHeader(signerErr.HttpCode)
 		return
 	}
 

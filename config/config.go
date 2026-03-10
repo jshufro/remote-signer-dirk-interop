@@ -28,6 +28,9 @@ type Config struct {
 		RefreshThreshold time.Duration `mapstructure:"refresh_threshold"`
 		RefreshRetry     time.Duration `mapstructure:"refresh_retry"`
 	}
+
+	// Network is either mainnet or hoodi
+	Network string `mapstructure:"network"`
 }
 
 // Load reads configuration from file and environment into cfg.
@@ -41,6 +44,7 @@ func Load(cfgFile string) (*Config, error) {
 	// Defaults
 	v.SetDefault("listen_address", "0.0.0.0")
 	v.SetDefault("listen_port", 9090)
+	v.SetDefault("network", "mainnet")
 
 	if cfgFile != "" {
 		v.SetConfigFile(cfgFile)
@@ -54,5 +58,18 @@ func Load(cfgFile string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshaling config: %w", err)
 	}
 
+	_ = cfg.GetGenesisForkVersion()
+
 	return &cfg, nil
+}
+
+func (c *Config) GetGenesisForkVersion() []byte {
+	switch c.Network {
+	case "mainnet":
+		return []byte{0x00, 0x00, 0x00, 0x00}
+	case "hoodi":
+		return []byte{0x10, 0x00, 0x09, 0x10}
+	default:
+		panic("invalid network")
+	}
 }

@@ -195,12 +195,13 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	write("import (\n")
 	write("\t\"context\"\n")
 	write("\t\"fmt\"\n")
+	write("\t\"github.com/jshufro/remote-signer-dirk-interop/internal/errors\"\n")
 	write(")\n\n")
 
 	write("// Signer combines all signable request types from the remote signing API.\n")
 	write("type Signer interface {\n")
 	for _, name := range schemaNames {
-		writef("\t%s(context.Context, [48]byte, *%s) ([96]byte, error)\n", name, name)
+		writef("\t%s(context.Context, [48]byte, *%s) ([96]byte, *errors.SignerError)\n", name, name)
 	}
 	write("}\n\n")
 
@@ -226,7 +227,7 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	write("}\n\n")
 
 	write("// Sign calls the appropriate sign method based on the type of the signable.\n")
-	write("func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) ([96]byte, error) {\n")
+	write("func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) ([96]byte, *errors.SignerError) {\n")
 	write("\tswitch signable := signable.(type) {\n")
 
 	for _, name := range schemaNames {
@@ -235,7 +236,7 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	}
 
 	write("\tdefault:\n")
-	write("\t\treturn [96]byte{}, fmt.Errorf(\"unknown signable type: %T\", signable)\n")
+	write("\t\treturn [96]byte{}, errors.ErrInternalServerError\n")
 	write("\t}\n")
 	write("}\n")
 

@@ -20,3 +20,7 @@ ssl:
     privkey: "/path/to/server.key"
 # Optional: root CA for verifying Dirk servers (omit to use system pool)
 root_ca: "/path/to/ca.crt"
+
+# Optional: network is either mainnet or hoodi
+# Default is mainnet
+network: "hoodi"

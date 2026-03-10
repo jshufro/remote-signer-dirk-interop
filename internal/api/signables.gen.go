@@ -5,23 +5,24 @@ package api
 import (
 	"context"
 	"fmt"
+	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
 )
 
 // Signer combines all signable request types from the remote signing API.
 type Signer interface {
-	AggregationSlotSigning(context.Context, [48]byte, *AggregationSlotSigning) ([96]byte, error)
-	AggregateAndProofSigning(context.Context, [48]byte, *AggregateAndProofSigning) ([96]byte, error)
-	AggregateAndProofSigningV2(context.Context, [48]byte, *AggregateAndProofSigningV2) ([96]byte, error)
-	AttestationSigning(context.Context, [48]byte, *AttestationSigning) ([96]byte, error)
-	BlockSigning(context.Context, [48]byte, *BlockSigning) ([96]byte, error)
-	BeaconBlockSigning(context.Context, [48]byte, *BeaconBlockSigning) ([96]byte, error)
-	DepositSigning(context.Context, [48]byte, *DepositSigning) ([96]byte, error)
-	RandaoRevealSigning(context.Context, [48]byte, *RandaoRevealSigning) ([96]byte, error)
-	VoluntaryExitSigning(context.Context, [48]byte, *VoluntaryExitSigning) ([96]byte, error)
-	SyncCommitteeMessageSigning(context.Context, [48]byte, *SyncCommitteeMessageSigning) ([96]byte, error)
-	SyncCommitteeSelectionProofSigning(context.Context, [48]byte, *SyncCommitteeSelectionProofSigning) ([96]byte, error)
-	SyncCommitteeContributionAndProofSigning(context.Context, [48]byte, *SyncCommitteeContributionAndProofSigning) ([96]byte, error)
-	ValidatorRegistrationSigning(context.Context, [48]byte, *ValidatorRegistrationSigning) ([96]byte, error)
+	AggregationSlotSigning(context.Context, [48]byte, *AggregationSlotSigning) ([96]byte, *errors.SignerError)
+	AggregateAndProofSigning(context.Context, [48]byte, *AggregateAndProofSigning) ([96]byte, *errors.SignerError)
+	AggregateAndProofSigningV2(context.Context, [48]byte, *AggregateAndProofSigningV2) ([96]byte, *errors.SignerError)
+	AttestationSigning(context.Context, [48]byte, *AttestationSigning) ([96]byte, *errors.SignerError)
+	BlockSigning(context.Context, [48]byte, *BlockSigning) ([96]byte, *errors.SignerError)
+	BeaconBlockSigning(context.Context, [48]byte, *BeaconBlockSigning) ([96]byte, *errors.SignerError)
+	DepositSigning(context.Context, [48]byte, *DepositSigning) ([96]byte, *errors.SignerError)
+	RandaoRevealSigning(context.Context, [48]byte, *RandaoRevealSigning) ([96]byte, *errors.SignerError)
+	VoluntaryExitSigning(context.Context, [48]byte, *VoluntaryExitSigning) ([96]byte, *errors.SignerError)
+	SyncCommitteeMessageSigning(context.Context, [48]byte, *SyncCommitteeMessageSigning) ([96]byte, *errors.SignerError)
+	SyncCommitteeSelectionProofSigning(context.Context, [48]byte, *SyncCommitteeSelectionProofSigning) ([96]byte, *errors.SignerError)
+	SyncCommitteeContributionAndProofSigning(context.Context, [48]byte, *SyncCommitteeContributionAndProofSigning) ([96]byte, *errors.SignerError)
+	ValidatorRegistrationSigning(context.Context, [48]byte, *ValidatorRegistrationSigning) ([96]byte, *errors.SignerError)
 }
 
 // StringToSignableType converts a discriminator string to a signable type.
@@ -59,7 +60,7 @@ func StringToSignableType(discriminator string) (any, error) {
 }
 
 // Sign calls the appropriate sign method based on the type of the signable.
-func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) ([96]byte, error) {
+func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) ([96]byte, *errors.SignerError) {
 	switch signable := signable.(type) {
 	case *AggregationSlotSigning:
 		return signer.AggregationSlotSigning(ctx, publicKey, signable)
@@ -88,6 +89,6 @@ func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) 
 	case *ValidatorRegistrationSigning:
 		return signer.ValidatorRegistrationSigning(ctx, publicKey, signable)
 	default:
-		return [96]byte{}, fmt.Errorf("unknown signable type: %T", signable)
+		return [96]byte{}, errors.ErrInternalServerError
 	}
 }

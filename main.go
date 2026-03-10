@@ -18,7 +18,6 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/service"
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
-	"github.com/rs/zerolog"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
 )
 
@@ -35,21 +34,6 @@ func parseLogLevel(level string) slog.Level {
 	}
 	fmt.Fprintf(os.Stderr, "invalid log level %s, defaulting to info\n", level)
 	return slog.LevelInfo
-}
-
-func slogLevelToZerologLevel(level slog.Level) zerolog.Level {
-	switch level {
-	case slog.LevelDebug:
-		return zerolog.DebugLevel
-	case slog.LevelInfo:
-		return zerolog.InfoLevel
-	case slog.LevelWarn:
-		return zerolog.WarnLevel
-	case slog.LevelError:
-		return zerolog.ErrorLevel
-	}
-	fmt.Fprintf(os.Stderr, "invalid zerolog level %d, defaulting to trace\n", level)
-	return zerolog.TraceLevel
 }
 
 func main() {
@@ -134,10 +118,17 @@ func main() {
 		dirkEndpoints[i] = e2wd.NewEndpoint(host, uint32(port))
 	}
 
-	dirkSigner := dirksigner.NewDirkSigner(dirkEndpoints, cfg.Dirk.Wallet, rootCA, tlsProvider)
+	dirkSigner := dirksigner.NewDirkSigner(
+		cfg.GetGenesisForkVersion(),
+		dirkEndpoints,
+		cfg.Dirk.Wallet,
+		rootCA,
+		tlsProvider,
+		log,
+	)
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Dirk.Timeout)
 	defer cancel()
-	err = dirkSigner.Open(ctx, slogLevelToZerologLevel(logLevel))
+	err = dirkSigner.Open(ctx, logLevel)
 	if err != nil {
 		log.Error("failed to open dirk signer", "error", err)
 		os.Exit(1)
