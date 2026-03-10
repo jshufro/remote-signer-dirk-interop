@@ -132,6 +132,19 @@ func (d *DirkSigner) getAccount(pubkey [48]byte) e2wt.AccountProtectingSigner {
 	return nil
 }
 
+func nilCheckFork(fork *api.Fork) *errors.SignerError {
+	if fork.CurrentVersion == nil {
+		return errors.ErrBadRequest
+	}
+	if fork.Epoch == nil {
+		return errors.ErrBadRequest
+	}
+	if fork.PreviousVersion == nil {
+		return errors.ErrBadRequest
+	}
+	return nil
+}
+
 func (d *DirkSigner) AggregationSlotSigning(ctx context.Context, pubkey [48]byte, obj *api.AggregationSlotSigning) ([96]byte, *errors.SignerError) {
 	return [96]byte{}, nil
 }
@@ -177,7 +190,134 @@ func (d *DirkSigner) SyncCommitteeSelectionProofSigning(ctx context.Context, pub
 }
 
 func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Context, pubkey [48]byte, obj *api.SyncCommitteeContributionAndProofSigning) ([96]byte, *errors.SignerError) {
-	return [96]byte{}, nil
+	// Sanity check field nilness
+	if obj.ContributionAndProof.AggregatorIndex == nil {
+		d.log.Warn("aggregator index is nil")
+		return [96]byte{}, errors.ErrBadRequest
+	}
+	if obj.ContributionAndProof.Contribution == nil {
+		d.log.Warn("contribution is nil")
+		return [96]byte{}, errors.ErrBadRequest
+	}
+	if obj.ContributionAndProof.SelectionProof == nil {
+		d.log.Warn("selection proof is nil")
+		return [96]byte{}, errors.ErrBadRequest
+	}
+
+	contribution := obj.ContributionAndProof.Contribution
+	if contribution.AggregationBits == nil {
+		d.log.Warn("aggregation bits is nil")
+		return [96]byte{}, errors.ErrBadRequest
+	}
+	if contribution.BeaconBlockRoot == nil {
+		d.log.Warn("beacon block root is nil")
+		return [96]byte{}, errors.ErrBadRequest
+	}
+	if contribution.Signature == nil {
+		d.log.Warn("signature is nil")
+		return [96]byte{}, errors.ErrBadRequest
+	}
+	if contribution.Slot == nil {
+		d.log.Warn("slot is nil")
+		return [96]byte{}, errors.ErrBadRequest
+	}
+	if contribution.SubcommitteeIndex == nil {
+		d.log.Warn("subcommittee index is nil")
+		return [96]byte{}, errors.ErrBadRequest
+	}
+
+	if nilCheckFork(&obj.ForkInfo.Fork) != nil {
+		d.log.Warn("fork info is nil")
+		return [96]byte{}, errors.ErrBadRequest
+	}
+
+	aggregatorIndex, err := decodeValidatorIndex(*obj.ContributionAndProof.AggregatorIndex)
+	if err != nil {
+		d.log.Warn("failed to decode aggregator index", "error", err, "aggregator index", *obj.ContributionAndProof.AggregatorIndex)
+		return [96]byte{}, err
+	}
+
+	aggregationBits, err := decodeBitVector128(*contribution.AggregationBits)
+	if err != nil {
+		d.log.Warn("failed to decode aggregation bits", "error", err, "aggregation bits", *contribution.AggregationBits)
+		return [96]byte{}, err
+	}
+
+	beaconBlockRoot, err := decodeRoot(*contribution.BeaconBlockRoot)
+	if err != nil {
+		d.log.Warn("failed to decode beacon block root", "error", err, "beacon block root", *contribution.BeaconBlockRoot)
+		return [96]byte{}, err
+	}
+
+	contributionSignature, err := decodeSignature(*contribution.Signature)
+	if err != nil {
+		d.log.Warn("failed to decode signature", "error", err, "signature", *contribution.Signature)
+		return [96]byte{}, err
+	}
+
+	slot, err := decodeSlot(*contribution.Slot)
+	if err != nil {
+		d.log.Warn("failed to decode slot", "error", err, "slot", *contribution.Slot)
+		return [96]byte{}, err
+	}
+
+	subcommitteeIndex, err := decodeUint64(*contribution.SubcommitteeIndex)
+	if err != nil {
+		d.log.Warn("failed to decode subcommittee index", "error", err, "subcommittee index", *contribution.SubcommitteeIndex)
+		return [96]byte{}, err
+	}
+
+	selectionProof, err := decodeSignature(*obj.ContributionAndProof.SelectionProof)
+	if err != nil {
+		d.log.Warn("failed to decode selection proof", "error", err, "selection proof", *obj.ContributionAndProof.SelectionProof)
+		return [96]byte{}, err
+	}
+
+	genesisValidatorsRoot, err := decodeRoot(obj.ForkInfo.GenesisValidatorsRoot)
+	if err != nil {
+		d.log.Warn("failed to decode genesis validators root", "error", err, "genesis validators root", obj.ForkInfo.GenesisValidatorsRoot)
+		return [96]byte{}, err
+	}
+
+	// Parse everything into ethpb.SyncCommitteeContributionAndProof
+	contributionAndProof := &ethpb.ContributionAndProof{
+		AggregatorIndex: aggregatorIndex,
+		Contribution: &ethpb.SyncCommitteeContribution{
+			AggregationBits:   aggregationBits,
+			BlockRoot:         beaconBlockRoot[:],
+			Signature:         contributionSignature[:],
+			Slot:              slot,
+			SubcommitteeIndex: subcommitteeIndex,
+		},
+		SelectionProof: selectionProof[:],
+	}
+
+	hashTreeRoot, nErr := contributionAndProof.HashTreeRoot()
+	if nErr != nil {
+		d.log.Warn("failed to compute hash tree root", "error", nErr)
+		return [96]byte{}, errors.ErrInternalServerError
+	}
+
+	// Compute the domain
+	domain, nErr := d.domain(domains.DomainSyncContributionAndProof, genesisValidatorsRoot[:], &obj.ForkInfo.Fork)
+	if nErr != nil {
+		d.log.Warn("failed to compute domain", "error", nErr)
+		return [96]byte{}, errors.ErrInternalServerError
+	}
+
+	account := d.getAccount(pubkey)
+	if account == nil {
+		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
+		return [96]byte{}, errors.ErrPublicKeyNotFound
+	}
+
+	signature, nErr := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
+	if nErr != nil {
+		d.log.Warn("failed to sign sync committee contribution and proof", "error", nErr)
+		return [96]byte{}, errors.ErrInternalServerError
+	}
+	d.log.Debug("signed sync committee contribution and proof", "pubkey", hex.EncodeToString(pubkey[:]))
+	return returnSignature(signature)
 }
 
 func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [48]byte, obj *api.ValidatorRegistrationSigning) ([96]byte, *errors.SignerError) {
@@ -197,12 +337,6 @@ func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [4
 	if obj.ValidatorRegistration.Pubkey == nil {
 		d.log.Warn("pubkey is nil")
 		return [96]byte{}, errors.ErrBadRequest
-	}
-
-	account := d.getAccount(pubkey)
-	if account == nil {
-		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
 	}
 
 	feeRecipient, err := feeRecipient(*obj.ValidatorRegistration.FeeRecipient)
@@ -246,8 +380,15 @@ func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [4
 		Pubkey:       pubkey[:],
 	}
 
+	hashTreeRoot, nErr := validatorRegistration.HashTreeRoot()
+	if nErr != nil {
+		d.log.Warn("failed to compute hash tree root", "error", nErr)
+		return [96]byte{}, errors.ErrInternalServerError
+	}
+
 	// Compute the domain
-	// For validator registrations, only genesis for version is needed
+	// For validator registrations, only genesis fork version is needed
+	// genesis validators root must be nil
 	domain, nErr := signing.ComputeDomain(
 		domains.DomainApplicationBuilder,
 		d.genesisForkVersion,
@@ -258,10 +399,10 @@ func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [4
 		return [96]byte{}, errors.ErrInternalServerError
 	}
 
-	hashTreeRoot, nErr := validatorRegistration.HashTreeRoot()
-	if nErr != nil {
-		d.log.Warn("failed to compute hash tree root", "error", nErr)
-		return [96]byte{}, errors.ErrInternalServerError
+	account := d.getAccount(pubkey)
+	if account == nil {
+		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
+		return [96]byte{}, errors.ErrPublicKeyNotFound
 	}
 
 	signature, nErr := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
