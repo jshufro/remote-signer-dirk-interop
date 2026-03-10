@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
@@ -89,13 +90,23 @@ func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string
 		defer cancel()
 	}
 
+	// Create a public key from the identifier
+	identifier = strings.TrimPrefix(identifier, "0x")
+	pubkeySlice, err := hex.DecodeString(identifier)
+	if err != nil || len(pubkeySlice) != 48 {
+		s.log.Error("failed to decode public key", "error", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	pubkey := [48]byte(pubkeySlice)
+
 	bodyCopy := bytes.NewBuffer(nil)
 	// Create a tee reader from the request body to the copy
 	teeReader := io.TeeReader(r.Body, bodyCopy)
 
 	// Start by parsing the request body into GenericBody
 	var genericBody GenericBody
-	err := json.NewDecoder(teeReader).Decode(&genericBody)
+	err = json.NewDecoder(teeReader).Decode(&genericBody)
 	if err != nil {
 		s.log.Error("failed to decode request body", "error", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -121,7 +132,7 @@ func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string
 	}
 
 	// Sign the object
-	signature, err := api.Sign(ctx, s.signer, signable)
+	signature, err := api.Sign(ctx, s.signer, pubkey, signable)
 	if err != nil {
 		s.log.Error("failed to sign object", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
