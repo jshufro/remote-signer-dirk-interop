@@ -27,32 +27,32 @@ type Signer interface {
 // StringToSignableType converts a discriminator string to a signable type.
 func StringToSignableType(discriminator string) (any, error) {
 	switch discriminator {
-	case "VALIDATOR_REGISTRATION":
-		return &ValidatorRegistrationSigning{}, nil
-	case "AGGREGATE_AND_PROOF_V2":
-		return &AggregateAndProofSigningV2{}, nil
-	case "VOLUNTARY_EXIT":
-		return &VoluntaryExitSigning{}, nil
-	case "SYNC_COMMITTEE_MESSAGE":
-		return &SyncCommitteeMessageSigning{}, nil
 	case "AGGREGATE_AND_PROOF":
 		return &AggregateAndProofSigning{}, nil
-	case "DEPOSIT":
-		return &DepositSigning{}, nil
+	case "AGGREGATE_AND_PROOF_V2":
+		return &AggregateAndProofSigningV2{}, nil
+	case "AGGREGATION_SLOT":
+		return &AggregationSlotSigning{}, nil
 	case "ATTESTATION":
 		return &AttestationSigning{}, nil
 	case "BLOCK":
 		return &BlockSigning{}, nil
-	case "RANDAO_REVEAL":
-		return &RandaoRevealSigning{}, nil
-	case "SYNC_COMMITTEE_SELECTION_PROOF":
-		return &SyncCommitteeSelectionProofSigning{}, nil
-	case "SYNC_COMMITTEE_CONTRIBUTION_AND_PROOF":
-		return &SyncCommitteeContributionAndProofSigning{}, nil
-	case "AGGREGATION_SLOT":
-		return &AggregationSlotSigning{}, nil
 	case "BLOCK_V2":
 		return &BeaconBlockSigning{}, nil
+	case "DEPOSIT":
+		return &DepositSigning{}, nil
+	case "RANDAO_REVEAL":
+		return &RandaoRevealSigning{}, nil
+	case "SYNC_COMMITTEE_CONTRIBUTION_AND_PROOF":
+		return &SyncCommitteeContributionAndProofSigning{}, nil
+	case "SYNC_COMMITTEE_MESSAGE":
+		return &SyncCommitteeMessageSigning{}, nil
+	case "SYNC_COMMITTEE_SELECTION_PROOF":
+		return &SyncCommitteeSelectionProofSigning{}, nil
+	case "VALIDATOR_REGISTRATION":
+		return &ValidatorRegistrationSigning{}, nil
+	case "VOLUNTARY_EXIT":
+		return &VoluntaryExitSigning{}, nil
 	default:
 		return nil, fmt.Errorf("unknown discriminator value: %s", discriminator)
 	}

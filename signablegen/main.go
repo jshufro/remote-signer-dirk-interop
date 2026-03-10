@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -197,12 +198,18 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	fmt.Fprintln(f, "// StringToSignableType converts a discriminator string to a signable type.")
 	fmt.Fprintln(f, "func StringToSignableType(discriminator string) (any, error) {")
 	fmt.Fprintln(f, "\tswitch discriminator {")
-	for discriminator, name := range discriminatorsToTypes {
+	discriminators := make([]string, 0, len(discriminatorsToTypes))
+	for discriminator := range discriminatorsToTypes {
+		discriminators = append(discriminators, discriminator)
+	}
+	sort.Strings(discriminators)
+	for _, discriminator := range discriminators {
+		name := discriminatorsToTypes[discriminator]
 		fmt.Fprintf(f, "\tcase %q:\n", discriminator)
 		fmt.Fprintf(f, "\t\treturn &%s{}, nil\n", name)
 	}
 	fmt.Fprintln(f, "\tdefault:")
-	fmt.Fprintln(f, "\t\treturn nil, fmt.Errorf(\"unknown discriminator value: %s\", discriminator)")
+	fmt.Fprintf(f, "\t\treturn nil, fmt.Errorf(\"unknown discriminator value: %%s\", discriminator)\n")
 	fmt.Fprintln(f, "\t}")
 	fmt.Fprintln(f, "}")
 	fmt.Fprintln(f)
@@ -214,7 +221,7 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 		fmt.Fprintf(f, "\t\treturn signer.%s(ctx, signable)\n", name)
 	}
 	fmt.Fprintln(f, "\tdefault:")
-	fmt.Fprintln(f, "\t\treturn [96]byte{}, fmt.Errorf(\"unknown signable type: %T\", signable)")
+	fmt.Fprintf(f, "\t\treturn [96]byte{}, fmt.Errorf(\"unknown signable type: %%T\", signable)\n")
 	fmt.Fprintln(f, "\t}")
 	fmt.Fprintln(f, "}")
 	fmt.Fprintln(f)

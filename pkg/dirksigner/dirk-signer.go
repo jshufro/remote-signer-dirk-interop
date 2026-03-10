@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 
 	"github.com/herumi/bls-eth-go-binary/bls"
+	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
 	"google.golang.org/grpc/credentials"
@@ -68,4 +69,56 @@ func (d *DirkSigner) GetPublicKeys(ctx context.Context) ([][48]byte, error) {
 	}
 
 	return out, nil
+}
+
+func (d *DirkSigner) AggregationSlotSigning(ctx context.Context, obj *api.AggregationSlotSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) AggregateAndProofSigning(ctx context.Context, obj *api.AggregateAndProofSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) AggregateAndProofSigningV2(ctx context.Context, obj *api.AggregateAndProofSigningV2) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) AttestationSigning(ctx context.Context, obj *api.AttestationSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) BlockSigning(ctx context.Context, obj *api.BlockSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, obj *api.BeaconBlockSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) DepositSigning(ctx context.Context, obj *api.DepositSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) RandaoRevealSigning(ctx context.Context, obj *api.RandaoRevealSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) VoluntaryExitSigning(ctx context.Context, obj *api.VoluntaryExitSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) SyncCommitteeMessageSigning(ctx context.Context, obj *api.SyncCommitteeMessageSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) SyncCommitteeSelectionProofSigning(ctx context.Context, obj *api.SyncCommitteeSelectionProofSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Context, obj *api.SyncCommitteeContributionAndProofSigning) ([96]byte, error) {
+	return [96]byte{}, nil
+}
+
+func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, obj *api.ValidatorRegistrationSigning) ([96]byte, error) {
+	return [96]byte{}, nil
 }
