@@ -69,7 +69,9 @@ func main() {
 		log.Error("failed to listen", "error", err)
 		os.Exit(1)
 	}
-	defer listener.Close()
+	defer func() {
+		_ = listener.Close()
+	}()
 
 	// Read CA into memory
 	var rootCABytes []byte
@@ -144,7 +146,10 @@ func main() {
 	go func() {
 		<-signalChan
 		log.Info("received signal, shutting down")
-		server.Shutdown(context.Background())
+		err := server.Shutdown(context.Background())
+		if err != nil {
+			log.Error("failed to shutdown server", "error", err)
+		}
 
 		// Restore sigterm handler
 		signal.Reset(os.Interrupt, syscall.SIGTERM)
