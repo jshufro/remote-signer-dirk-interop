@@ -11,7 +11,7 @@ type AccountCache struct {
 }
 
 func (c *AccountCache) Get(key [48]byte) e2wt.Account {
-	account, ok := c.Map.Load(key)
+	account, ok := c.Load(key)
 	if !ok {
 		return nil
 	}
@@ -19,5 +19,5 @@ func (c *AccountCache) Get(key [48]byte) e2wt.Account {
 }
 
 func (c *AccountCache) Set(key [48]byte, account e2wt.Account) {
-	c.Map.Store(key, account)
+	c.Store(key, account)
 }
