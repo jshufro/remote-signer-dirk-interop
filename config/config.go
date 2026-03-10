@@ -2,20 +2,32 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/viper"
 )
 
 // Config holds application configuration.
 type Config struct {
-	ListenAddress string   `mapstructure:"listen_address"`
-	ListenPort    uint16   `mapstructure:"listen_port"`
-	DirkEndpoints []string `mapstructure:"dirk_endpoints"`
+	LogLevel  string `mapstructure:"log_level"`
+	LogFormat string `mapstructure:"log_format"`
+
+	ListenAddress string `mapstructure:"listen_address"`
+	ListenPort    uint16 `mapstructure:"listen_port"`
+	Dirk          struct {
+		Timeout   time.Duration `mapstructure:"timeout"`
+		Endpoints []string      `mapstructure:"endpoints"`
+		Wallet    string        `mapstructure:"wallet"`
+	} `mapstructure:"dirk"`
 
 	// TLS: required for serving and/or connecting to Dirk
-	SSLCert    string `mapstructure:"ssl_cert"`
-	SSLPrivKey string `mapstructure:"ssl_privkey"`
-	RootCA     string `mapstructure:"root_ca"` // optional
+	SSL struct {
+		Cert             string        `mapstructure:"cert"`
+		PrivKey          string        `mapstructure:"privkey"`
+		RootCA           string        `mapstructure:"root_ca"` // optional
+		RefreshThreshold time.Duration `mapstructure:"refresh_threshold"`
+		RefreshRetry     time.Duration `mapstructure:"refresh_retry"`
+	}
 }
 
 // Load reads configuration from file and environment into cfg.

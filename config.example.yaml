@@ -1,13 +1,22 @@
+log_level: "debug"
+log_format: "json"
+
 # Example config. Use -config path/to/file or REMOTE_SIGNER_* env vars.
 listen_address: "0.0.0.0"
 listen_port: 9090
 # Dirk endpoints: "host:port" or "domain:port" (no scheme).
-dirk_endpoints:
-  - "dirk.example.com:9091"
-  - "dirk-two.example.com:9091"
+dirk:
+  timeout: 4s
+  endpoints:
+    - "dirk.example.com:9091"
+    - "dirk-two.example.com:9091"
+  wallet: "wallet-name"
 
 # TLS for serving and/or connecting to Dirk
-ssl_cert: "/path/to/server.crt"
-ssl_privkey: "/path/to/server.key"
+ssl:
+    refresh_threshold: 24h
+    refresh_retry: 10m
+    cert: "/path/to/server.crt"
+    privkey: "/path/to/server.key"
 # Optional: root CA for verifying Dirk servers (omit to use system pool)
 root_ca: "/path/to/ca.crt"

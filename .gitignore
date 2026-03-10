@@ -1,2 +1,4 @@
 .go-version
 remote-signer-dirk-interop
+config.yaml
+*.key
