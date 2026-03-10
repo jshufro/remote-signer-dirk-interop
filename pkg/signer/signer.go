@@ -2,10 +2,12 @@ package signer
 
 import (
 	"context"
+
+	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
 )
 
 type RemoteSigner interface {
-	//api.Signer
+	api.Signer
 	PublicKeysProvider
 }
 

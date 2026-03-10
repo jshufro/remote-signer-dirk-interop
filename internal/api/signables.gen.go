@@ -4,21 +4,91 @@ package api
 
 import (
 	"context"
+	"fmt"
 )
 
 // Signer combines all signable request types from the remote signing API.
 type Signer interface {
-	SignAggregationSlotSigning(context.Context, *AggregationSlotSigning) ([96]byte, error)
-	SignAggregateAndProofSigning(context.Context, *AggregateAndProofSigning) ([96]byte, error)
-	SignAggregateAndProofSigningV2(context.Context, *AggregateAndProofSigningV2) ([96]byte, error)
-	SignAttestationSigning(context.Context, *AttestationSigning) ([96]byte, error)
-	SignBlockSigning(context.Context, *BlockSigning) ([96]byte, error)
-	SignBeaconBlockSigning(context.Context, *BeaconBlockSigning) ([96]byte, error)
-	SignDepositSigning(context.Context, *DepositSigning) ([96]byte, error)
-	SignRandaoRevealSigning(context.Context, *RandaoRevealSigning) ([96]byte, error)
-	SignVoluntaryExitSigning(context.Context, *VoluntaryExitSigning) ([96]byte, error)
-	SignSyncCommitteeMessageSigning(context.Context, *SyncCommitteeMessageSigning) ([96]byte, error)
-	SignSyncCommitteeSelectionProofSigning(context.Context, *SyncCommitteeSelectionProofSigning) ([96]byte, error)
-	SignSyncCommitteeContributionAndProofSigning(context.Context, *SyncCommitteeContributionAndProofSigning) ([96]byte, error)
-	SignValidatorRegistrationSigning(context.Context, *ValidatorRegistrationSigning) ([96]byte, error)
+	AggregationSlotSigning(context.Context, *AggregationSlotSigning) ([96]byte, error)
+	AggregateAndProofSigning(context.Context, *AggregateAndProofSigning) ([96]byte, error)
+	AggregateAndProofSigningV2(context.Context, *AggregateAndProofSigningV2) ([96]byte, error)
+	AttestationSigning(context.Context, *AttestationSigning) ([96]byte, error)
+	BlockSigning(context.Context, *BlockSigning) ([96]byte, error)
+	BeaconBlockSigning(context.Context, *BeaconBlockSigning) ([96]byte, error)
+	DepositSigning(context.Context, *DepositSigning) ([96]byte, error)
+	RandaoRevealSigning(context.Context, *RandaoRevealSigning) ([96]byte, error)
+	VoluntaryExitSigning(context.Context, *VoluntaryExitSigning) ([96]byte, error)
+	SyncCommitteeMessageSigning(context.Context, *SyncCommitteeMessageSigning) ([96]byte, error)
+	SyncCommitteeSelectionProofSigning(context.Context, *SyncCommitteeSelectionProofSigning) ([96]byte, error)
+	SyncCommitteeContributionAndProofSigning(context.Context, *SyncCommitteeContributionAndProofSigning) ([96]byte, error)
+	ValidatorRegistrationSigning(context.Context, *ValidatorRegistrationSigning) ([96]byte, error)
 }
+
+// StringToSignableType converts a discriminator string to a signable type.
+func StringToSignableType(discriminator string) (any, error) {
+	switch discriminator {
+	case "VALIDATOR_REGISTRATION":
+		return &ValidatorRegistrationSigning{}, nil
+	case "AGGREGATE_AND_PROOF_V2":
+		return &AggregateAndProofSigningV2{}, nil
+	case "VOLUNTARY_EXIT":
+		return &VoluntaryExitSigning{}, nil
+	case "SYNC_COMMITTEE_MESSAGE":
+		return &SyncCommitteeMessageSigning{}, nil
+	case "AGGREGATE_AND_PROOF":
+		return &AggregateAndProofSigning{}, nil
+	case "DEPOSIT":
+		return &DepositSigning{}, nil
+	case "ATTESTATION":
+		return &AttestationSigning{}, nil
+	case "BLOCK":
+		return &BlockSigning{}, nil
+	case "RANDAO_REVEAL":
+		return &RandaoRevealSigning{}, nil
+	case "SYNC_COMMITTEE_SELECTION_PROOF":
+		return &SyncCommitteeSelectionProofSigning{}, nil
+	case "SYNC_COMMITTEE_CONTRIBUTION_AND_PROOF":
+		return &SyncCommitteeContributionAndProofSigning{}, nil
+	case "AGGREGATION_SLOT":
+		return &AggregationSlotSigning{}, nil
+	case "BLOCK_V2":
+		return &BeaconBlockSigning{}, nil
+	default:
+		return nil, fmt.Errorf("unknown discriminator value: %s", discriminator)
+	}
+}
+
+// Sign calls the appropriate sign method based on the type of the signable.
+func Sign(ctx context.Context, signer Signer, signable any) ([96]byte, error) {
+	switch signable := signable.(type) {
+	case *AggregationSlotSigning:
+		return signer.AggregationSlotSigning(ctx, signable)
+	case *AggregateAndProofSigning:
+		return signer.AggregateAndProofSigning(ctx, signable)
+	case *AggregateAndProofSigningV2:
+		return signer.AggregateAndProofSigningV2(ctx, signable)
+	case *AttestationSigning:
+		return signer.AttestationSigning(ctx, signable)
+	case *BlockSigning:
+		return signer.BlockSigning(ctx, signable)
+	case *BeaconBlockSigning:
+		return signer.BeaconBlockSigning(ctx, signable)
+	case *DepositSigning:
+		return signer.DepositSigning(ctx, signable)
+	case *RandaoRevealSigning:
+		return signer.RandaoRevealSigning(ctx, signable)
+	case *VoluntaryExitSigning:
+		return signer.VoluntaryExitSigning(ctx, signable)
+	case *SyncCommitteeMessageSigning:
+		return signer.SyncCommitteeMessageSigning(ctx, signable)
+	case *SyncCommitteeSelectionProofSigning:
+		return signer.SyncCommitteeSelectionProofSigning(ctx, signable)
+	case *SyncCommitteeContributionAndProofSigning:
+		return signer.SyncCommitteeContributionAndProofSigning(ctx, signable)
+	case *ValidatorRegistrationSigning:
+		return signer.ValidatorRegistrationSigning(ctx, signable)
+	default:
+		return [96]byte{}, fmt.Errorf("unknown signable type: %T", signable)
+	}
+}
+

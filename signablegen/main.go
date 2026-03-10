@@ -9,24 +9,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// main is a small code generator which:
-//   - Takes two arguments: the path to schemas.yaml and the path to sign.yaml
-//   - Parses sign.yaml and extracts the schema names from:
-//     post.requestBody.content.application/json.schema.oneOf
-//   - Emits Go code to stdout defining:
-//     type Signable[T any] interface {
-//     Sign(ctx context.Context, signable *T) ([96]byte, error)
-//     }
-//     type Signer interface {
-//     Signable[api.<SchemaName1>]
-//     Signable[api.<SchemaName2>]
-//     ...
-//     }
-//
-// The generated code is intended to live in the dirksigner package and use the
-// api types from internal/api. Run it like:
-//
-//	go run ./signablegen ../remote-signing-api/signing/schemas.yaml ../remote-signing-api/signing/paths/sign.yaml > pkg/signer/signables.gen.go
 func main() {
 	if len(os.Args) != 4 {
 		log.Fatalf("usage: %s <pkgname> <sign.yaml> <dst.go>", os.Args[0])
@@ -48,7 +30,17 @@ func main() {
 		log.Fatalf("parsing sign.yaml: %v", err)
 	}
 
-	oneOf, err := extractOneOf(root)
+	schema, err := extractSchema(root)
+	if err != nil {
+		log.Fatalf("extracting schema from sign.yaml: %v", err)
+	}
+
+	discriminatorMapping, err := extractDiscriminatorMapping(schema)
+	if err != nil {
+		log.Fatalf("extracting discriminator mapping from sign.yaml: %v", err)
+	}
+
+	oneOf, err := extractOneOf(schema)
 	if err != nil {
 		log.Fatalf("extracting oneOf from sign.yaml: %v", err)
 	}
@@ -58,14 +50,24 @@ func main() {
 		log.Fatalf("no schemas found under post.requestBody.content.application/json.schema.oneOf")
 	}
 
-	if err := emitGo(pkgname, schemaNames, dst); err != nil {
+	discriminatorsToTypes, err := discriminatorMappingToTypes(discriminatorMapping)
+	if err != nil {
+		log.Fatalf("extracting discriminator mapping to types: %v", err)
+	}
+	if len(discriminatorsToTypes) == 0 {
+		log.Fatalf("no discriminator mapping found")
+	}
+
+	if len(discriminatorsToTypes) != len(schemaNames) {
+		log.Fatalf("number of discriminator mappings does not match number of schemas")
+	}
+
+	if err := emitGo(pkgname, schemaNames, discriminatorsToTypes, dst); err != nil {
 		log.Fatalf("emitting Go: %v", err)
 	}
 }
 
-// extractOneOf navigates the parsed sign.yaml structure to the
-// post.requestBody.content.application/json.schema.oneOf node.
-func extractOneOf(root map[string]any) ([]any, error) {
+func extractSchema(root map[string]any) (map[string]any, error) {
 	post, ok := root["post"].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("missing or invalid 'post' object")
@@ -90,6 +92,24 @@ func extractOneOf(root map[string]any) ([]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("missing or invalid '...application/json.schema'")
 	}
+	return schema, nil
+}
+
+func extractDiscriminatorMapping(schema map[string]any) (map[string]any, error) {
+	rawDiscriminator, ok := schema["discriminator"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("missing or invalid '...schema.discriminator'")
+	}
+
+	discriminatorMapping, ok := rawDiscriminator["mapping"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("missing or invalid '...schema.discriminator.mapping'")
+	}
+
+	return discriminatorMapping, nil
+}
+
+func extractOneOf(schema map[string]any) ([]any, error) {
 
 	rawOneOf, ok := schema["oneOf"].([]any)
 	if !ok {
@@ -99,10 +119,14 @@ func extractOneOf(root map[string]any) ([]any, error) {
 	return rawOneOf, nil
 }
 
-// schemaNamesFromRefs extracts schema names from a oneOf array of $ref objects.
-// Each element is expected to look like:
-//
-//	{ "$ref": "../schemas.yaml#/components/schemas/AggregationSlotSigning" }
+func refToName(ref string) string {
+	lastSlash := strings.LastIndex(ref, "/")
+	if lastSlash == -1 || lastSlash+1 >= len(ref) {
+		return ""
+	}
+	return ref[lastSlash+1:]
+}
+
 func schemaNamesFromRefs(oneOf []any) []string {
 	seen := make(map[string]struct{})
 	var out []string
@@ -117,12 +141,7 @@ func schemaNamesFromRefs(oneOf []any) []string {
 			continue
 		}
 
-		// Take the part after the last '/' – this is the schema name.
-		lastSlash := strings.LastIndex(ref, "/")
-		if lastSlash == -1 || lastSlash+1 >= len(ref) {
-			continue
-		}
-		name := ref[lastSlash+1:]
+		name := refToName(ref)
 		if name == "" {
 			continue
 		}
@@ -137,12 +156,20 @@ func schemaNamesFromRefs(oneOf []any) []string {
 	return out
 }
 
-// emitGo writes the generated Go code to stdout.
-//
-// It assumes:
-//   - The target package is `signer`
-//   - The remote signing types live in `github.com/jshufro/remote-signer-dirk-interop/internal/api`
-func emitGo(pkgname string, schemaNames []string, dst string) error {
+func discriminatorMappingToTypes(discriminatorMapping map[string]any) (map[string]string, error) {
+	types := make(map[string]string)
+	for discriminator, schema := range discriminatorMapping {
+		schemaStr, ok := schema.(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid schema type: %T", schema)
+		}
+
+		types[discriminator] = refToName(schemaStr)
+	}
+	return types, nil
+}
+
+func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[string]string, dst string) error {
 	// Get the deepest directory name from the dst path
 	f, err := os.Create(dst)
 	if err != nil {
@@ -156,15 +183,40 @@ func emitGo(pkgname string, schemaNames []string, dst string) error {
 	fmt.Fprintln(f)
 	fmt.Fprintln(f, "import (")
 	fmt.Fprintln(f, "\t\"context\"")
+	fmt.Fprintln(f, "\t\"fmt\"")
 	fmt.Fprintln(f, ")")
 	fmt.Fprintln(f)
 
 	fmt.Fprintln(f, "// Signer combines all signable request types from the remote signing API.")
 	fmt.Fprintln(f, "type Signer interface {")
 	for _, name := range schemaNames {
-		fmt.Fprintf(f, "\tSign%s(context.Context, *%s) ([96]byte, error)\n", name, name)
+		fmt.Fprintf(f, "\t%s(context.Context, *%s) ([96]byte, error)\n", name, name)
 	}
 	fmt.Fprintln(f, "}")
-
+	fmt.Fprintln(f)
+	fmt.Fprintln(f, "// StringToSignableType converts a discriminator string to a signable type.")
+	fmt.Fprintln(f, "func StringToSignableType(discriminator string) (any, error) {")
+	fmt.Fprintln(f, "\tswitch discriminator {")
+	for discriminator, name := range discriminatorsToTypes {
+		fmt.Fprintf(f, "\tcase %q:\n", discriminator)
+		fmt.Fprintf(f, "\t\treturn &%s{}, nil\n", name)
+	}
+	fmt.Fprintln(f, "\tdefault:")
+	fmt.Fprintln(f, "\t\treturn nil, fmt.Errorf(\"unknown discriminator value: %s\", discriminator)")
+	fmt.Fprintln(f, "\t}")
+	fmt.Fprintln(f, "}")
+	fmt.Fprintln(f)
+	fmt.Fprintln(f, "// Sign calls the appropriate sign method based on the type of the signable.")
+	fmt.Fprintln(f, "func Sign(ctx context.Context, signer Signer, signable any) ([96]byte, error) {")
+	fmt.Fprintln(f, "\tswitch signable := signable.(type) {")
+	for _, name := range schemaNames {
+		fmt.Fprintf(f, "\tcase *%s:\n", name)
+		fmt.Fprintf(f, "\t\treturn signer.%s(ctx, signable)\n", name)
+	}
+	fmt.Fprintln(f, "\tdefault:")
+	fmt.Fprintln(f, "\t\treturn [96]byte{}, fmt.Errorf(\"unknown signable type: %T\", signable)")
+	fmt.Fprintln(f, "\t}")
+	fmt.Fprintln(f, "}")
+	fmt.Fprintln(f)
 	return nil
 }
