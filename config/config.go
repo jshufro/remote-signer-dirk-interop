@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -67,9 +69,24 @@ func (c *Config) GetGenesisForkVersion() []byte {
 	switch c.Network {
 	case "mainnet":
 		return []byte{0x00, 0x00, 0x00, 0x00}
+	case "holesky":
+		return []byte{0x01, 0x01, 0x70, 0x00}
 	case "hoodi":
 		return []byte{0x10, 0x00, 0x09, 0x10}
+	case "sepolia":
+		return []byte{0x90, 0x00, 0x00, 0x69}
 	default:
-		panic("invalid network")
+		if trimmed, found := strings.CutPrefix(c.Network, "0x"); found {
+			hexBytes, err := hex.DecodeString(trimmed)
+			if err != nil {
+				panic(fmt.Sprintf("invalid genesis fork version: %s: %v", c.Network, err))
+			}
+			if len(hexBytes) != 4 {
+				panic(fmt.Sprintf("invalid genesis fork version length: %s: %d", c.Network, len(hexBytes)))
+			}
+			return hexBytes
+
+		}
+		panic(fmt.Sprintf("invalid network: %s", c.Network))
 	}
 }

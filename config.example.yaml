@@ -21,6 +21,8 @@ ssl:
 # Optional: root CA for verifying Dirk servers (omit to use system pool)
 root_ca: "/path/to/ca.crt"
 
-# Optional: network is either mainnet or hoodi
+# Optional: network is either mainnet, holesky, hoodi, or sepolia
+# Alternatively, set network to a 0x-prefixed hex string representing the genesis fork version
+# of your custom network (e.g. 0x10000910 would be hoodi)
 # Default is mainnet
 network: "hoodi"

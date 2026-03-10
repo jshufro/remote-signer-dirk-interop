@@ -37,8 +37,15 @@ func parseLogLevel(level string) slog.Level {
 }
 
 func main() {
-	cfgPath := flag.String("config", "config.yaml", "Path to config file (optional)")
+	cfgPath := flag.String("config", "config.yaml", "Path to config file")
 	flag.Parse()
+
+	if *cfgPath == "" {
+		fmt.Fprintf(os.Stderr, "config file is required\n")
+		fmt.Fprintln(os.Stderr)
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
