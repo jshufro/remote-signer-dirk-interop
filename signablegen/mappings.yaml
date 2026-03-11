@@ -1,0 +1,7 @@
+imports: 
+  - name: "apiv1"
+    path: "github.com/attestantio/go-eth2-client/api/v1"
+  - path: "github.com/attestantio/go-eth2-client/spec/altair"
+types:
+  ContributionAndProof: altair.ContributionAndProof
+  ValidatorRegistration: apiv1.ValidatorRegistration

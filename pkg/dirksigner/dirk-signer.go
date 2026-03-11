@@ -19,7 +19,6 @@ import (
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
 	"google.golang.org/grpc/credentials"
 
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	e2t "github.com/wealdtech/go-eth2-types/v2"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
 	e2wt "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -177,79 +176,20 @@ func (d *DirkSigner) SyncCommitteeSelectionProofSigning(ctx context.Context, pub
 }
 
 func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Context, pubkey [48]byte, obj *api.SyncCommitteeContributionAndProofSigning) ([96]byte, *errors.SignerError) {
-	contribution := obj.ContributionAndProof.Contribution
-
-	aggregatorIndex, err := decodeValidatorIndex(obj.ContributionAndProof.AggregatorIndex)
+	hashTreeRoot, err := obj.ContributionAndProof.HashTreeRoot()
 	if err != nil {
-		d.log.Warn("failed to decode aggregator index", "error", err, "aggregator index", obj.ContributionAndProof.AggregatorIndex)
-		return [96]byte{}, err
-	}
-
-	aggregationBits, err := decodeBitVector128(contribution.AggregationBits)
-	if err != nil {
-		d.log.Warn("failed to decode aggregation bits", "error", err, "aggregation bits", contribution.AggregationBits)
-		return [96]byte{}, err
-	}
-
-	beaconBlockRoot, err := decodeRoot(contribution.BeaconBlockRoot)
-	if err != nil {
-		d.log.Warn("failed to decode beacon block root", "error", err, "beacon block root", contribution.BeaconBlockRoot)
-		return [96]byte{}, err
-	}
-
-	contributionSignature, err := decodeSignature(contribution.Signature)
-	if err != nil {
-		d.log.Warn("failed to decode signature", "error", err, "signature", contribution.Signature)
-		return [96]byte{}, err
-	}
-
-	slot, err := decodeSlot(contribution.Slot)
-	if err != nil {
-		d.log.Warn("failed to decode slot", "error", err, "slot", contribution.Slot)
-		return [96]byte{}, err
-	}
-
-	subcommitteeIndex, err := decodeUint64(contribution.SubcommitteeIndex)
-	if err != nil {
-		d.log.Warn("failed to decode subcommittee index", "error", err, "subcommittee index", contribution.SubcommitteeIndex)
-		return [96]byte{}, err
-	}
-
-	selectionProof, err := decodeSignature(obj.ContributionAndProof.SelectionProof)
-	if err != nil {
-		d.log.Warn("failed to decode selection proof", "error", err, "selection proof", obj.ContributionAndProof.SelectionProof)
-		return [96]byte{}, err
-	}
-
-	genesisValidatorsRoot, err := decodeRoot(obj.ForkInfo.GenesisValidatorsRoot)
-	if err != nil {
-		d.log.Warn("failed to decode genesis validators root", "error", err, "genesis validators root", obj.ForkInfo.GenesisValidatorsRoot)
-		return [96]byte{}, err
-	}
-
-	// Parse everything into ethpb.SyncCommitteeContributionAndProof
-	contributionAndProof := &ethpb.ContributionAndProof{
-		AggregatorIndex: aggregatorIndex,
-		Contribution: &ethpb.SyncCommitteeContribution{
-			AggregationBits:   aggregationBits,
-			BlockRoot:         beaconBlockRoot[:],
-			Signature:         contributionSignature[:],
-			Slot:              slot,
-			SubcommitteeIndex: subcommitteeIndex,
-		},
-		SelectionProof: selectionProof[:],
-	}
-
-	hashTreeRoot, nErr := contributionAndProof.HashTreeRoot()
-	if nErr != nil {
-		d.log.Warn("failed to compute hash tree root", "error", nErr)
+		d.log.Warn("failed to compute hash tree root", "error", err)
 		return [96]byte{}, errors.ErrInternalServerError
 	}
 
 	// Compute the domain
-	domain, nErr := d.domain(domains.DomainSyncContributionAndProof, genesisValidatorsRoot[:], &obj.ForkInfo.Fork)
-	if nErr != nil {
-		d.log.Warn("failed to compute domain", "error", nErr)
+	domain, err := d.calculateDomain(
+		domains.DomainSyncContributionAndProof,
+		obj.ForkInfo.GenesisValidatorsRoot,
+		&obj.ForkInfo.Fork,
+	)
+	if err != nil {
+		d.log.Warn("failed to compute domain", "error", err)
 		return [96]byte{}, errors.ErrInternalServerError
 	}
 
@@ -259,9 +199,9 @@ func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Contex
 		return [96]byte{}, errors.ErrPublicKeyNotFound
 	}
 
-	signature, nErr := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if nErr != nil {
-		d.log.Warn("failed to sign sync committee contribution and proof", "error", nErr)
+	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
+	if err != nil {
+		d.log.Warn("failed to sign sync committee contribution and proof", "error", err)
 		return [96]byte{}, errors.ErrInternalServerError
 	}
 	d.log.Debug("signed sync committee contribution and proof", "pubkey", hex.EncodeToString(pubkey[:]))
@@ -270,32 +210,9 @@ func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Contex
 
 func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [48]byte, obj *api.ValidatorRegistrationSigning) ([96]byte, *errors.SignerError) {
 
-	feeRecipient, err := feeRecipient(obj.ValidatorRegistration.FeeRecipient)
-	if err != nil {
-		d.log.Warn("failed to decode fee recipient", "error", err, "fee recipient", obj.ValidatorRegistration.FeeRecipient)
-		return [96]byte{}, err
-	}
+	msgPubkey := obj.ValidatorRegistration.Pubkey
 
-	gasLimit, err := decodeUint64(obj.ValidatorRegistration.GasLimit)
-	if err != nil {
-		d.log.Warn("failed to decode gas limit", "error", err, "gas limit", obj.ValidatorRegistration.GasLimit)
-		return [96]byte{}, err
-	}
-
-	timestamp, err := decodeUint64(obj.ValidatorRegistration.Timestamp)
-	if err != nil {
-		d.log.Warn("failed to decode timestamp", "error", err, "timestamp", obj.ValidatorRegistration.Timestamp)
-		return [96]byte{}, err
-	}
-
-	// Parse the pubkey and make sure it matches the identifier
-	msgPubkey, err := decodeHex(obj.ValidatorRegistration.Pubkey)
-	if err != nil {
-		d.log.Warn("failed to decode pubkey", "error", err, "pubkey", obj.ValidatorRegistration.Pubkey)
-		return [96]byte{}, err
-	}
-
-	if !bytes.Equal(msgPubkey, pubkey[:]) {
+	if !bytes.Equal(msgPubkey[:], pubkey[:]) {
 		d.log.Warn("refusing to sign validator registration with wrong validator identity",
 			"msg pubkey", hex.EncodeToString(msgPubkey[:]),
 			"url path pubkey", hex.EncodeToString(pubkey[:]))
@@ -303,30 +220,22 @@ func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [4
 		return [96]byte{}, errors.ErrBadRequest
 	}
 
-	// Copy fields into api.ValidatorRegistration
-	validatorRegistration := &ethpb.ValidatorRegistrationV1{
-		FeeRecipient: feeRecipient[:],
-		GasLimit:     gasLimit,
-		Timestamp:    timestamp,
-		Pubkey:       pubkey[:],
-	}
-
-	hashTreeRoot, nErr := validatorRegistration.HashTreeRoot()
-	if nErr != nil {
-		d.log.Warn("failed to compute hash tree root", "error", nErr)
+	hashTreeRoot, err := obj.ValidatorRegistration.HashTreeRoot()
+	if err != nil {
+		d.log.Warn("failed to compute hash tree root", "error", err)
 		return [96]byte{}, errors.ErrInternalServerError
 	}
 
 	// Compute the domain
 	// For validator registrations, only genesis fork version is needed
 	// genesis validators root must be nil
-	domain, nErr := signing.ComputeDomain(
+	domain, err := signing.ComputeDomain(
 		domains.DomainApplicationBuilder,
 		d.genesisForkVersion,
 		nil, /* genesis validators root */
 	)
-	if nErr != nil {
-		d.log.Warn("failed to compute domain", "error", nErr)
+	if err != nil {
+		d.log.Warn("failed to compute domain", "error", err)
 		return [96]byte{}, errors.ErrInternalServerError
 	}
 
@@ -336,12 +245,11 @@ func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [4
 		return [96]byte{}, errors.ErrPublicKeyNotFound
 	}
 
-	signature, nErr := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if nErr != nil {
-		d.log.Warn("failed to sign validator registration", "error", nErr)
+	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
+	if err != nil {
+		d.log.Warn("failed to sign validator registration", "error", err)
 		return [96]byte{}, errors.ErrInternalServerError
 	}
-	d.log.Debug("signed validator registration", "pubkey", hex.EncodeToString(pubkey[:]),
-		"fee recipient", hex.EncodeToString(feeRecipient[:]))
+	d.log.Debug("signed validator registration", "pubkey", hex.EncodeToString(pubkey[:]))
 	return returnSignature(signature)
 }

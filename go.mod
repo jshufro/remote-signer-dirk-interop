@@ -9,6 +9,7 @@ require (
 	github.com/oapi-codegen/runtime v1.2.0
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/viper v1.19.0
+	github.com/wealdtech/go-eth2-types/v2 v2.8.2
 	github.com/wealdtech/go-eth2-wallet-dirk v1.6.0
 	github.com/wealdtech/go-eth2-wallet-types/v2 v2.12.0
 	google.golang.org/grpc v1.71.0
@@ -69,7 +70,6 @@ require (
 	github.com/supranational/blst v0.3.16-0.20250831170142-f48500c1fdbe // indirect
 	github.com/thomaso-mirodin/intmath v0.0.0-20160323211736-5dc6d854e46e // indirect
 	github.com/wealdtech/eth2-signer-api v1.7.2 // indirect
-	github.com/wealdtech/go-eth2-types/v2 v2.8.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0 // indirect
 	go.opentelemetry.io/otel v1.35.0 // indirect

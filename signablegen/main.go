@@ -2,19 +2,48 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
+//go:embed mappings.yaml
+var yamlFile []byte
+
+type Import struct {
+	Name string `yaml:"name"`
+	Path string `yaml:"path"`
+}
+
+type Mappings struct {
+	Imports []Import          `yaml:"imports"`
+	Types   map[string]string `yaml:"types"`
+}
+
+func (i Import) String() string {
+	if i.Name == "" {
+		return fmt.Sprintf("\t\"%s\"\n", i.Path)
+	}
+	return fmt.Sprintf("\t%s \"%s\"\n", i.Name, i.Path)
+}
+
+var mappings Mappings
+
 func main() {
 	if len(os.Args) != 4 {
 		log.Fatalf("usage: %s <pkgname> <sign.yaml> <dst.go>", os.Args[0])
+	}
+
+	// parse mappings.yaml
+	if err := yaml.Unmarshal(yamlFile, &mappings); err != nil {
+		log.Fatalf("parsing mappings.yaml: %v", err)
 	}
 
 	// schemasPath is currently unused but kept for the intended interface.
@@ -175,6 +204,15 @@ func discriminatorMappingToTypes(discriminatorMapping map[string]any) (map[strin
 func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[string]string, dst string) error {
 	var buf bytes.Buffer
 
+	slices.SortFunc(mappings.Imports, func(a, b Import) int {
+		return strings.Compare(a.Path, b.Path)
+	})
+
+	customImports := make([]string, 0, len(mappings.Imports))
+	for _, importItem := range mappings.Imports {
+		customImports = append(customImports, importItem.String())
+	}
+
 	write := func(s string) {
 		if _, err := buf.WriteString(s); err != nil {
 			// bytes.Buffer.WriteString currently never returns an error,
@@ -195,20 +233,28 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	write("import (\n")
 	write("\t\"context\"\n")
 	write("\t\"fmt\"\n")
+	write("\n")
 	write("\t\"github.com/jshufro/remote-signer-dirk-interop/internal/errors\"\n")
-	write(")\n\n")
-
+	write("\n")
+	for _, importItem := range customImports {
+		write(importItem)
+	}
+	write(")\n")
+	write("\n")
+	for from, to := range mappings.Types {
+		writef("type %s = %s\n", from, to)
+	}
+	write("\n")
 	write("// Signer combines all signable request types from the remote signing API.\n")
 	write("type Signer interface {\n")
 	for _, name := range schemaNames {
 		writef("\t%s(context.Context, [48]byte, *%s) ([96]byte, *errors.SignerError)\n", name, name)
 	}
-	write("}\n\n")
-
+	write("}\n")
+	write("\n")
 	write("// StringToSignableType converts a discriminator string to a signable type.\n")
 	write("func StringToSignableType(discriminator string) (any, error) {\n")
 	write("\tswitch discriminator {\n")
-
 	discriminators := make([]string, 0, len(discriminatorsToTypes))
 	for discriminator := range discriminatorsToTypes {
 		discriminators = append(discriminators, discriminator)
@@ -224,8 +270,8 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	write("\tdefault:\n")
 	write("\t\treturn nil, fmt.Errorf(\"unknown discriminator value: %s\", discriminator)\n")
 	write("\t}\n")
-	write("}\n\n")
-
+	write("}\n")
+	write("\n")
 	write("// Sign calls the appropriate sign method based on the type of the signable.\n")
 	write("func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) ([96]byte, *errors.SignerError) {\n")
 	write("\tswitch signable := signable.(type) {\n")

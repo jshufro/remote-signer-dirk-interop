@@ -836,15 +836,6 @@ type Checkpoint struct {
 	Root  string `json:"root,omitempty"`
 }
 
-// ContributionAndProof defines model for ContributionAndProof.
-type ContributionAndProof struct {
-	AggregatorIndex string                    `json:"aggregator_index,omitempty"`
-	Contribution    SyncCommitteeContribution `json:"contribution,omitempty"`
-
-	// SelectionProof Bytes96 hexadecimal
-	SelectionProof string `json:"selection_proof,omitempty"`
-}
-
 // Deposit defines model for Deposit.
 type Deposit struct {
 	Data  DepositData `json:"data,omitempty"`
@@ -1063,15 +1054,6 @@ type SyncCommitteeSelectionProofSigning struct {
 
 // SyncCommitteeSelectionProofSigningType Signing Request type
 type SyncCommitteeSelectionProofSigningType string
-
-// ValidatorRegistration defines model for ValidatorRegistration.
-type ValidatorRegistration struct {
-	// FeeRecipient Bytes20 hexadecimal
-	FeeRecipient string `json:"fee_recipient,omitempty"`
-	GasLimit     string `json:"gas_limit,omitempty"`
-	Pubkey       string `json:"pubkey,omitempty"`
-	Timestamp    string `json:"timestamp,omitempty"`
-}
 
 // ValidatorRegistrationSigning defines model for ValidatorRegistrationSigning.
 type ValidatorRegistrationSigning struct {

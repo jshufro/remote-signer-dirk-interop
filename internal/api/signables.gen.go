@@ -5,8 +5,15 @@ package api
 import (
 	"context"
 	"fmt"
+
 	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
+
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/altair"
 )
+
+type ContributionAndProof = altair.ContributionAndProof
+type ValidatorRegistration = apiv1.ValidatorRegistration
 
 // Signer combines all signable request types from the remote signing API.
 type Signer interface {

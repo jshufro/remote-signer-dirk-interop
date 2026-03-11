@@ -7,6 +7,19 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
 )
 
+func (d *DirkSigner) calculateDomain(domainType domains.DomainType, genesisValidatorsRoot string, fork *api.Fork) ([]byte, error) {
+	genesisValidatorsRootBytes, err := decodeHex(genesisValidatorsRoot)
+	if err != nil {
+		return nil, errors.ErrBadRequest
+	}
+
+	return d.domain(
+		domainType,
+		genesisValidatorsRootBytes[:],
+		fork,
+	)
+}
+
 func (d *DirkSigner) domain(domainType domains.DomainType, genesisValidatorsRoot []byte, fork *api.Fork) ([]byte, error) {
 	forkVersion, err := decodeHex(fork.CurrentVersion)
 	if err != nil {
