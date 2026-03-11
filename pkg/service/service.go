@@ -139,11 +139,9 @@ func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string
 		return
 	}
 
-	signatureStr := "0x" + hex.EncodeToString(signature[:])
-
 	// Create a response
 	response := api.SigningResponse{
-		Signature: &signatureStr,
+		Signature: "0x" + hex.EncodeToString(signature[:]),
 	}
 
 	// Serialize the response to the writer

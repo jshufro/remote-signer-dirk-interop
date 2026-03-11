@@ -7,3 +7,4 @@ import-mapping:
   ../schemas.yaml: "-" 
 output-options:
   skip-prune: true
+  prefer-skip-optional-pointer: true

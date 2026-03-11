@@ -132,19 +132,6 @@ func (d *DirkSigner) getAccount(pubkey [48]byte) e2wt.AccountProtectingSigner {
 	return nil
 }
 
-func nilCheckFork(fork *api.Fork) *errors.SignerError {
-	if fork.CurrentVersion == nil {
-		return errors.ErrBadRequest
-	}
-	if fork.Epoch == nil {
-		return errors.ErrBadRequest
-	}
-	if fork.PreviousVersion == nil {
-		return errors.ErrBadRequest
-	}
-	return nil
-}
-
 func (d *DirkSigner) AggregationSlotSigning(ctx context.Context, pubkey [48]byte, obj *api.AggregationSlotSigning) ([96]byte, *errors.SignerError) {
 	return [96]byte{}, nil
 }
@@ -190,86 +177,47 @@ func (d *DirkSigner) SyncCommitteeSelectionProofSigning(ctx context.Context, pub
 }
 
 func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Context, pubkey [48]byte, obj *api.SyncCommitteeContributionAndProofSigning) ([96]byte, *errors.SignerError) {
-	// Sanity check field nilness
-	if obj.ContributionAndProof.AggregatorIndex == nil {
-		d.log.Warn("aggregator index is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-	if obj.ContributionAndProof.Contribution == nil {
-		d.log.Warn("contribution is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-	if obj.ContributionAndProof.SelectionProof == nil {
-		d.log.Warn("selection proof is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-
 	contribution := obj.ContributionAndProof.Contribution
-	if contribution.AggregationBits == nil {
-		d.log.Warn("aggregation bits is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-	if contribution.BeaconBlockRoot == nil {
-		d.log.Warn("beacon block root is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-	if contribution.Signature == nil {
-		d.log.Warn("signature is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-	if contribution.Slot == nil {
-		d.log.Warn("slot is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-	if contribution.SubcommitteeIndex == nil {
-		d.log.Warn("subcommittee index is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
 
-	if nilCheckFork(&obj.ForkInfo.Fork) != nil {
-		d.log.Warn("fork info is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-
-	aggregatorIndex, err := decodeValidatorIndex(*obj.ContributionAndProof.AggregatorIndex)
+	aggregatorIndex, err := decodeValidatorIndex(obj.ContributionAndProof.AggregatorIndex)
 	if err != nil {
-		d.log.Warn("failed to decode aggregator index", "error", err, "aggregator index", *obj.ContributionAndProof.AggregatorIndex)
+		d.log.Warn("failed to decode aggregator index", "error", err, "aggregator index", obj.ContributionAndProof.AggregatorIndex)
 		return [96]byte{}, err
 	}
 
-	aggregationBits, err := decodeBitVector128(*contribution.AggregationBits)
+	aggregationBits, err := decodeBitVector128(contribution.AggregationBits)
 	if err != nil {
-		d.log.Warn("failed to decode aggregation bits", "error", err, "aggregation bits", *contribution.AggregationBits)
+		d.log.Warn("failed to decode aggregation bits", "error", err, "aggregation bits", contribution.AggregationBits)
 		return [96]byte{}, err
 	}
 
-	beaconBlockRoot, err := decodeRoot(*contribution.BeaconBlockRoot)
+	beaconBlockRoot, err := decodeRoot(contribution.BeaconBlockRoot)
 	if err != nil {
-		d.log.Warn("failed to decode beacon block root", "error", err, "beacon block root", *contribution.BeaconBlockRoot)
+		d.log.Warn("failed to decode beacon block root", "error", err, "beacon block root", contribution.BeaconBlockRoot)
 		return [96]byte{}, err
 	}
 
-	contributionSignature, err := decodeSignature(*contribution.Signature)
+	contributionSignature, err := decodeSignature(contribution.Signature)
 	if err != nil {
-		d.log.Warn("failed to decode signature", "error", err, "signature", *contribution.Signature)
+		d.log.Warn("failed to decode signature", "error", err, "signature", contribution.Signature)
 		return [96]byte{}, err
 	}
 
-	slot, err := decodeSlot(*contribution.Slot)
+	slot, err := decodeSlot(contribution.Slot)
 	if err != nil {
-		d.log.Warn("failed to decode slot", "error", err, "slot", *contribution.Slot)
+		d.log.Warn("failed to decode slot", "error", err, "slot", contribution.Slot)
 		return [96]byte{}, err
 	}
 
-	subcommitteeIndex, err := decodeUint64(*contribution.SubcommitteeIndex)
+	subcommitteeIndex, err := decodeUint64(contribution.SubcommitteeIndex)
 	if err != nil {
-		d.log.Warn("failed to decode subcommittee index", "error", err, "subcommittee index", *contribution.SubcommitteeIndex)
+		d.log.Warn("failed to decode subcommittee index", "error", err, "subcommittee index", contribution.SubcommitteeIndex)
 		return [96]byte{}, err
 	}
 
-	selectionProof, err := decodeSignature(*obj.ContributionAndProof.SelectionProof)
+	selectionProof, err := decodeSignature(obj.ContributionAndProof.SelectionProof)
 	if err != nil {
-		d.log.Warn("failed to decode selection proof", "error", err, "selection proof", *obj.ContributionAndProof.SelectionProof)
+		d.log.Warn("failed to decode selection proof", "error", err, "selection proof", obj.ContributionAndProof.SelectionProof)
 		return [96]byte{}, err
 	}
 
@@ -321,46 +269,29 @@ func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Contex
 }
 
 func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [48]byte, obj *api.ValidatorRegistrationSigning) ([96]byte, *errors.SignerError) {
-	// Sanity check field nilness
-	if obj.ValidatorRegistration.FeeRecipient == nil {
-		d.log.Warn("fee recipient is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-	if obj.ValidatorRegistration.GasLimit == nil {
-		d.log.Warn("gas limit is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-	if obj.ValidatorRegistration.Timestamp == nil {
-		d.log.Warn("timestamp is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
-	if obj.ValidatorRegistration.Pubkey == nil {
-		d.log.Warn("pubkey is nil")
-		return [96]byte{}, errors.ErrBadRequest
-	}
 
-	feeRecipient, err := feeRecipient(*obj.ValidatorRegistration.FeeRecipient)
+	feeRecipient, err := feeRecipient(obj.ValidatorRegistration.FeeRecipient)
 	if err != nil {
-		d.log.Warn("failed to decode fee recipient", "error", err, "fee recipient", *obj.ValidatorRegistration.FeeRecipient)
+		d.log.Warn("failed to decode fee recipient", "error", err, "fee recipient", obj.ValidatorRegistration.FeeRecipient)
 		return [96]byte{}, err
 	}
 
-	gasLimit, err := decodeUint64(*obj.ValidatorRegistration.GasLimit)
+	gasLimit, err := decodeUint64(obj.ValidatorRegistration.GasLimit)
 	if err != nil {
-		d.log.Warn("failed to decode gas limit", "error", err, "gas limit", *obj.ValidatorRegistration.GasLimit)
+		d.log.Warn("failed to decode gas limit", "error", err, "gas limit", obj.ValidatorRegistration.GasLimit)
 		return [96]byte{}, err
 	}
 
-	timestamp, err := decodeUint64(*obj.ValidatorRegistration.Timestamp)
+	timestamp, err := decodeUint64(obj.ValidatorRegistration.Timestamp)
 	if err != nil {
-		d.log.Warn("failed to decode timestamp", "error", err, "timestamp", *obj.ValidatorRegistration.Timestamp)
+		d.log.Warn("failed to decode timestamp", "error", err, "timestamp", obj.ValidatorRegistration.Timestamp)
 		return [96]byte{}, err
 	}
 
 	// Parse the pubkey and make sure it matches the identifier
-	msgPubkey, err := decodeHex(*obj.ValidatorRegistration.Pubkey)
+	msgPubkey, err := decodeHex(obj.ValidatorRegistration.Pubkey)
 	if err != nil {
-		d.log.Warn("failed to decode pubkey", "error", err, "pubkey", *obj.ValidatorRegistration.Pubkey)
+		d.log.Warn("failed to decode pubkey", "error", err, "pubkey", obj.ValidatorRegistration.Pubkey)
 		return [96]byte{}, err
 	}
 

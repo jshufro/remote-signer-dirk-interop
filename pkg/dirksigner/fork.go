@@ -8,7 +8,7 @@ import (
 )
 
 func (d *DirkSigner) domain(domainType domains.DomainType, genesisValidatorsRoot []byte, fork *api.Fork) ([]byte, error) {
-	forkVersion, err := decodeHex(*fork.CurrentVersion)
+	forkVersion, err := decodeHex(fork.CurrentVersion)
 	if err != nil {
 		return nil, errors.ErrBadRequest
 	}

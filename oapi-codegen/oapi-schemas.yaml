@@ -4,3 +4,4 @@ generate:
 output: internal/api/schemas.gen.go
 output-options:
   skip-prune: true
+  prefer-skip-optional-pointer: true
