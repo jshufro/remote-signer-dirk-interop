@@ -2,3 +2,4 @@
 remote-signer-dirk-interop
 config.yaml
 *.key
+*.crt
