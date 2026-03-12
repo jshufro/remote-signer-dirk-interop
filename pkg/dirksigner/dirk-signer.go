@@ -106,7 +106,7 @@ func (d *DirkSigner) Open(ctx context.Context, logLevel slog.Level) error {
 	return err
 }
 
-func (d *DirkSigner) GetPublicKeys(ctx context.Context) ([][48]byte, error) {
+func (d *DirkSigner) GetPublicKeys(ctx context.Context) ([][48]byte, errors.SignerError) {
 
 	accounts := d.wallet.Accounts(ctx)
 	out := make([][48]byte, 0)
@@ -135,13 +135,21 @@ func (d *DirkSigner) getAccount(pubkey [48]byte) e2wt.AccountProtectingSigner {
 	return nil
 }
 
-func (d *DirkSigner) AggregationSlotSigning(ctx context.Context, pubkey [48]byte, obj *api.AggregationSlotSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) returnSignature(signature e2t.Signature) ([96]byte, errors.SignerError) {
+	b := signature.Marshal()
+	if len(b) != 96 {
+		d.log.Warn("produced signature is not 96 bytes", "signature", hex.EncodeToString(b))
+		return [96]byte{}, errors.InternalServerError()
+	}
+	return [96]byte(b), nil
+}
+
+func (d *DirkSigner) AggregationSlotSigning(ctx context.Context, pubkey [48]byte, obj *api.AggregationSlotSigning) ([96]byte, errors.SignerError) {
 
 	slotStr := obj.AggregationSlot.Slot
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
 	if err != nil {
-		d.log.Warn("failed to parse slot", "error", err)
-		return [96]byte{}, errors.ErrBadRequest
+		return [96]byte{}, errors.BadRequest("failed to parse slot: %w", err)
 	}
 	hasher := ssz.NewHasher()
 	hasher.AppendUint64(slot)
@@ -149,7 +157,7 @@ func (d *DirkSigner) AggregationSlotSigning(ctx context.Context, pubkey [48]byte
 	hashTreeRoot, err := hasher.HashRoot()
 	if err != nil {
 		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	// Compute the domain
@@ -160,30 +168,30 @@ func (d *DirkSigner) AggregationSlotSigning(ctx context.Context, pubkey [48]byte
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign randao reveal", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed randao reveal", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) AggregateAndProofSigningV2(ctx context.Context, pubkey [48]byte, obj *api.AggregateAndProofSigningV2) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) AggregateAndProofSigningV2(ctx context.Context, pubkey [48]byte, obj *api.AggregateAndProofSigningV2) ([96]byte, errors.SignerError) {
 	aggregateAndProof := obj.AggregateAndProof
 	discriminator, err := aggregateAndProof.Discriminator()
 	if err != nil {
 		d.log.Warn("failed to get discriminator", "error", err)
-		return [96]byte{}, errors.ErrBadRequest
+		return [96]byte{}, errors.BadRequest("failed to get 'type': %w", err)
 	}
 
 	var hashTreeRoot [32]byte
@@ -199,13 +207,12 @@ func (d *DirkSigner) AggregateAndProofSigningV2(ctx context.Context, pubkey [48]
 	case "DENEB":
 		phase0AggregateAndProof, err := aggregateAndProof.AsAggregateAndProofRequestPhase0()
 		if err != nil {
-			d.log.Warn("failed to get phase0 aggregate and proof", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get phase0 aggregate and proof: %w", err)
 		}
 		hashTreeRoot, err = phase0AggregateAndProof.Data.HashTreeRoot()
 		if err != nil {
 			d.log.Warn("failed to compute hash tree root", "error", err)
-			return [96]byte{}, errors.ErrInternalServerError
+			return [96]byte{}, errors.InternalServerError()
 		}
 	case "ELECTRA":
 		fallthrough
@@ -213,16 +220,16 @@ func (d *DirkSigner) AggregateAndProofSigningV2(ctx context.Context, pubkey [48]
 		electraAggregateAndProof, err := aggregateAndProof.AsAggregateAndProofRequestElectra()
 		if err != nil {
 			d.log.Warn("failed to get electra aggregate and proof", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get electra aggregate and proof: %w", err)
 		}
 		hashTreeRoot, err = electraAggregateAndProof.Data.HashTreeRoot()
 		if err != nil {
 			d.log.Warn("failed to compute hash tree root", "error", err)
-			return [96]byte{}, errors.ErrInternalServerError
+			return [96]byte{}, errors.InternalServerError()
 		}
 	default:
-		d.log.Error("unknown aggregate and proof type", "discriminator", discriminator)
-		return [96]byte{}, errors.ErrBadRequest
+		d.log.Warn("unknown aggregate and proof type", "discriminator", discriminator)
+		return [96]byte{}, errors.BadRequest("unknown aggregate and proof type: %s", discriminator)
 	}
 
 	domain, err := d.calculateDomain(
@@ -232,25 +239,25 @@ func (d *DirkSigner) AggregateAndProofSigningV2(ctx context.Context, pubkey [48]
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign aggregate and proof", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed aggregate and proof", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) AttestationSigning(ctx context.Context, pubkey [48]byte, obj *api.AttestationSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) AttestationSigning(ctx context.Context, pubkey [48]byte, obj *api.AttestationSigning) ([96]byte, errors.SignerError) {
 	attestation := obj.Attestation
 	domain, err := d.calculateDomain(
 		domains.DomainBeaconAttester,
@@ -259,13 +266,13 @@ func (d *DirkSigner) AttestationSigning(ctx context.Context, pubkey [48]byte, ob
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignBeaconAttestation(
@@ -281,23 +288,22 @@ func (d *DirkSigner) AttestationSigning(ctx context.Context, pubkey [48]byte, ob
 	)
 	if err != nil {
 		d.log.Warn("failed to sign beacon attestation", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed beacon attestation", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, pubkey [48]byte, obj *api.BeaconBlockSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, pubkey [48]byte, obj *api.BeaconBlockSigning) ([96]byte, errors.SignerError) {
 	block := obj.BeaconBlock
 	discriminator, err := block.Discriminator()
 	if err != nil {
-		d.log.Warn("failed to get discriminator", "error", err)
-		return [96]byte{}, errors.ErrBadRequest
+		return [96]byte{}, errors.BadRequest("failed to get discriminator: %w", err)
 	}
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	// Compute the domain
@@ -308,7 +314,7 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, pubkey [48]byte, ob
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	var header api.BeaconBlockHeader
@@ -317,12 +323,11 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, pubkey [48]byte, ob
 		phase0Block, err := block.AsBlockRequestPhase0()
 		if err != nil {
 			d.log.Warn("failed to get phase0 block", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get phase0 block: %w", err)
 		}
 		bodyRoot, err := phase0Block.Block.Body.HashTreeRoot()
 		if err != nil {
-			d.log.Warn("failed to get body root", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get body root: %w", err)
 		}
 		signature, err := account.SignBeaconProposal(
 			ctx,
@@ -335,20 +340,18 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, pubkey [48]byte, ob
 		)
 		if err != nil {
 			d.log.Warn("failed to sign beacon proposal", "error", err)
-			return [96]byte{}, errors.ErrInternalServerError
+			return [96]byte{}, errors.InternalServerError()
 		}
 		d.log.Debug("signed beacon proposal", "pubkey", hex.EncodeToString(pubkey[:]))
-		return returnSignature(signature)
+		return d.returnSignature(signature)
 	case "ALTAIR":
 		altairBlock, err := block.AsBlockRequestAltair()
 		if err != nil {
-			d.log.Warn("failed to get altair block", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get altair block: %w", err)
 		}
 		bodyRoot, err := altairBlock.Block.Body.HashTreeRoot()
 		if err != nil {
-			d.log.Warn("failed to get body root", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get body root: %w", err)
 		}
 		signature, err := account.SignBeaconProposal(
 			ctx,
@@ -361,48 +364,43 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, pubkey [48]byte, ob
 		)
 		if err != nil {
 			d.log.Warn("failed to sign beacon proposal", "error", err)
-			return [96]byte{}, errors.ErrInternalServerError
+			return [96]byte{}, errors.InternalServerError()
 		}
 		d.log.Debug("signed beacon proposal", "pubkey", hex.EncodeToString(pubkey[:]))
-		return returnSignature(signature)
+		return d.returnSignature(signature)
 	case "BELLATRIX":
 		bellatrixBlock, err := block.AsBlockRequestBellatrix()
 		if err != nil {
-			d.log.Warn("failed to get bellatrix block", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get bellatrix block: %w", err)
 		}
 		header = bellatrixBlock.BlockHeader
 	case "CAPELLA":
 		capellaBlock, err := block.AsBlockRequestCapella()
 		if err != nil {
-			d.log.Warn("failed to get capella block", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get capella block: %w", err)
 		}
 		header = capellaBlock.BlockHeader
 	case "DENEB":
 		denebBlock, err := block.AsBlockRequestDeneb()
 		if err != nil {
-			d.log.Warn("failed to get deneb block", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get deneb block: %w", err)
 		}
 		header = denebBlock.BlockHeader
 	case "ELECTRA":
 		electraBlock, err := block.AsBlockRequestElectra()
 		if err != nil {
-			d.log.Warn("failed to get electra block", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get electra block: %w", err)
 		}
 		header = electraBlock.BlockHeader
 	case "FULU":
 		fuluBlock, err := block.AsBlockRequestFulu()
 		if err != nil {
-			d.log.Warn("failed to get fulu block", "error", err)
-			return [96]byte{}, errors.ErrBadRequest
+			return [96]byte{}, errors.BadRequest("failed to get fulu block: %w", err)
 		}
 		header = fuluBlock.BlockHeader
 	default:
-		d.log.Error("unknown block type", "discriminator", discriminator)
-		return [96]byte{}, errors.ErrBadRequest
+		d.log.Warn("unknown block type", "discriminator", discriminator)
+		return [96]byte{}, errors.BadRequest("unknown block type: %s", discriminator)
 	}
 	signature, err := account.SignBeaconProposal(
 		ctx,
@@ -415,31 +413,28 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, pubkey [48]byte, ob
 	)
 	if err != nil {
 		d.log.Warn("failed to sign beacon proposal", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed beacon proposal", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) DepositSigning(ctx context.Context, pubkey [48]byte, obj *api.DepositSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) DepositSigning(ctx context.Context, pubkey [48]byte, obj *api.DepositSigning) ([96]byte, errors.SignerError) {
 	// Round-trip the obj.Deposit to a phase0.DepositMessage via json
 	depositMessageJson, err := json.Marshal(obj.Deposit)
 	if err != nil {
-		d.log.Warn("failed to marshal deposit", "error", err)
-		return [96]byte{}, errors.ErrBadRequest
+		return [96]byte{}, errors.BadRequest("failed to remarshal deposit: %w", err)
 	}
 	deposit := &phase0.DepositMessage{}
 	err = json.Unmarshal(depositMessageJson, deposit)
 	if err != nil {
-		d.log.Warn("failed to unmarshal deposit", "error", err)
-		return [96]byte{}, errors.ErrBadRequest
+		return [96]byte{}, errors.BadRequest("failed to unmarshal deposit: %w", err)
 	}
 
 	// Compute the hash tree root
 	hashTreeRoot, err := deposit.HashTreeRoot()
 	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	// Compute the domain
@@ -452,31 +447,30 @@ func (d *DirkSigner) DepositSigning(ctx context.Context, pubkey [48]byte, obj *a
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign deposit", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed deposit", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) RandaoRevealSigning(ctx context.Context, pubkey [48]byte, obj *api.RandaoRevealSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) RandaoRevealSigning(ctx context.Context, pubkey [48]byte, obj *api.RandaoRevealSigning) ([96]byte, errors.SignerError) {
 
 	randaoReveal := obj.RandaoReveal.Epoch
 	epoch, err := strconv.ParseUint(randaoReveal, 10, 64)
 	if err != nil {
-		d.log.Warn("failed to parse epoch", "error", err)
-		return [96]byte{}, errors.ErrBadRequest
+		return [96]byte{}, errors.BadRequest("failed to parse epoch: %w", err)
 	}
 	hasher := ssz.NewHasher()
 	hasher.AppendUint64(epoch)
@@ -484,7 +478,7 @@ func (d *DirkSigner) RandaoRevealSigning(ctx context.Context, pubkey [48]byte, o
 	hashTreeRoot, err := hasher.HashRoot()
 	if err != nil {
 		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	// Compute the domain
@@ -495,29 +489,29 @@ func (d *DirkSigner) RandaoRevealSigning(ctx context.Context, pubkey [48]byte, o
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign randao reveal", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed randao reveal", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) VoluntaryExitSigning(ctx context.Context, pubkey [48]byte, obj *api.VoluntaryExitSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) VoluntaryExitSigning(ctx context.Context, pubkey [48]byte, obj *api.VoluntaryExitSigning) ([96]byte, errors.SignerError) {
 	hashTreeRoot, err := obj.VoluntaryExit.HashTreeRoot()
 	if err != nil {
 		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	// Compute the domain
@@ -528,29 +522,29 @@ func (d *DirkSigner) VoluntaryExitSigning(ctx context.Context, pubkey [48]byte, 
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign voluntary exit", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed voluntary exit", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) SyncCommitteeMessageSigning(ctx context.Context, pubkey [48]byte, obj *api.SyncCommitteeMessageSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) SyncCommitteeMessageSigning(ctx context.Context, pubkey [48]byte, obj *api.SyncCommitteeMessageSigning) ([96]byte, errors.SignerError) {
 	hashTreeRoot, err := obj.SyncCommitteeMessage.HashTreeRoot()
 	if err != nil {
 		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	// Compute the domain
@@ -561,29 +555,29 @@ func (d *DirkSigner) SyncCommitteeMessageSigning(ctx context.Context, pubkey [48
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign sync committee message", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed sync committee message", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) SyncCommitteeSelectionProofSigning(ctx context.Context, pubkey [48]byte, obj *api.SyncCommitteeSelectionProofSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) SyncCommitteeSelectionProofSigning(ctx context.Context, pubkey [48]byte, obj *api.SyncCommitteeSelectionProofSigning) ([96]byte, errors.SignerError) {
 	hashTreeRoot, err := obj.SyncAggregatorSelectionData.HashTreeRoot()
 	if err != nil {
 		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	// Compute the domain
@@ -594,29 +588,29 @@ func (d *DirkSigner) SyncCommitteeSelectionProofSigning(ctx context.Context, pub
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign sync committee selection proof", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed sync committee selection proof", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Context, pubkey [48]byte, obj *api.SyncCommitteeContributionAndProofSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Context, pubkey [48]byte, obj *api.SyncCommitteeContributionAndProofSigning) ([96]byte, errors.SignerError) {
 	hashTreeRoot, err := obj.ContributionAndProof.HashTreeRoot()
 	if err != nil {
 		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	// Compute the domain
@@ -627,25 +621,25 @@ func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Contex
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign sync committee contribution and proof", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed sync committee contribution and proof", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }
 
-func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [48]byte, obj *api.ValidatorRegistrationSigning) ([96]byte, *errors.SignerError) {
+func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [48]byte, obj *api.ValidatorRegistrationSigning) ([96]byte, errors.SignerError) {
 
 	msgPubkey := obj.ValidatorRegistration.Pubkey
 
@@ -654,13 +648,13 @@ func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [4
 			"msg pubkey", hex.EncodeToString(msgPubkey[:]),
 			"url path pubkey", hex.EncodeToString(pubkey[:]))
 
-		return [96]byte{}, errors.ErrBadRequest
+		return [96]byte{}, errors.BadRequest("refusing to sign validator registration with wrong validator identity")
 	}
 
 	hashTreeRoot, err := obj.ValidatorRegistration.HashTreeRoot()
 	if err != nil {
 		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	// Compute the domain
@@ -673,20 +667,20 @@ func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, pubkey [4
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 
 	account := d.getAccount(pubkey)
 	if account == nil {
 		d.log.Warn("account not found in cache", "pubkey", hex.EncodeToString(pubkey[:]))
-		return [96]byte{}, errors.ErrPublicKeyNotFound
+		return [96]byte{}, errors.PublicKeyNotFound("account not found in cache")
 	}
 
 	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign validator registration", "error", err)
-		return [96]byte{}, errors.ErrInternalServerError
+		return [96]byte{}, errors.InternalServerError()
 	}
 	d.log.Debug("signed validator registration", "pubkey", hex.EncodeToString(pubkey[:]))
-	return returnSignature(signature)
+	return d.returnSignature(signature)
 }

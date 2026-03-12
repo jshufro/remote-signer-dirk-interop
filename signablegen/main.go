@@ -262,7 +262,7 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 		if _, ok := skipTypes[name]; ok {
 			continue
 		}
-		writef("\t%s(context.Context, [48]byte, *%s) ([96]byte, *errors.SignerError)\n", name, name)
+		writef("\t%s(context.Context, [48]byte, *%s) ([96]byte, errors.SignerError)\n", name, name)
 	}
 	write("}\n")
 	write("\n")
@@ -290,7 +290,7 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	write("}\n")
 	write("\n")
 	write("// Sign calls the appropriate sign method based on the type of the signable.\n")
-	write("func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) ([96]byte, *errors.SignerError) {\n")
+	write("func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) ([96]byte, errors.SignerError) {\n")
 	write("\tswitch signable := signable.(type) {\n")
 
 	for _, name := range schemaNames {
@@ -302,7 +302,7 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	}
 
 	write("\tdefault:\n")
-	write("\t\treturn [96]byte{}, errors.ErrInternalServerError\n")
+	write("\t\treturn [96]byte{}, errors.InternalServerError()\n")
 	write("\t}\n")
 	write("}\n")
 
