@@ -13,14 +13,6 @@ func (d *DirkSigner) calculateDomain(domainType domains.DomainType, genesisValid
 		return nil, errors.ErrBadRequest
 	}
 
-	return d.domain(
-		domainType,
-		genesisValidatorsRootBytes[:],
-		fork,
-	)
-}
-
-func (d *DirkSigner) domain(domainType domains.DomainType, genesisValidatorsRoot []byte, fork *api.Fork) ([]byte, error) {
 	forkVersion, err := decodeHex(fork.CurrentVersion)
 	if err != nil {
 		return nil, errors.ErrBadRequest
@@ -32,7 +24,7 @@ func (d *DirkSigner) domain(domainType domains.DomainType, genesisValidatorsRoot
 	out, nErr := signing.ComputeDomain(
 		domainType,
 		forkVersion,
-		genesisValidatorsRoot[:],
+		genesisValidatorsRootBytes,
 	)
 	if nErr != nil {
 		d.log.Warn("failed to compute domain", "error", nErr)
