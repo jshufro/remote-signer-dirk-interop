@@ -115,21 +115,6 @@ func (e AggregateAndProofRequestPhase0Version) Valid() bool {
 	}
 }
 
-// Defines values for AggregateAndProofSigningType.
-const (
-	AGGREGATEANDPROOF AggregateAndProofSigningType = "AGGREGATE_AND_PROOF"
-)
-
-// Valid indicates whether the value is a known member of the AggregateAndProofSigningType enum.
-func (e AggregateAndProofSigningType) Valid() bool {
-	switch e {
-	case AGGREGATEANDPROOF:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AggregateAndProofSigningV2Type.
 const (
 	AGGREGATEANDPROOFV2 AggregateAndProofSigningV2Type = "AGGREGATE_AND_PROOF_V2"
@@ -295,21 +280,6 @@ func (e BlockRequestPhase0Version) Valid() bool {
 	}
 }
 
-// Defines values for BlockSigningType.
-const (
-	BLOCK BlockSigningType = "BLOCK"
-)
-
-// Valid indicates whether the value is a known member of the BlockSigningType enum.
-func (e BlockSigningType) Valid() bool {
-	switch e {
-	case BLOCK:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for DepositSigningType.
 const (
 	DEPOSIT DepositSigningType = "DEPOSIT"
@@ -415,24 +385,6 @@ func (e VoluntaryExitSigningType) Valid() bool {
 	}
 }
 
-// AggregateAndProofElectra defines model for AggregateAndProofElectra.
-type AggregateAndProofElectra struct {
-	Aggregate       AttestationElectra `json:"aggregate,omitempty"`
-	AggregatorIndex string             `json:"aggregator_index,omitempty"`
-
-	// SelectionProof Bytes96 hexadecimal
-	SelectionProof string `json:"selection_proof,omitempty"`
-}
-
-// AggregateAndProofPhase0 defines model for AggregateAndProofPhase0.
-type AggregateAndProofPhase0 struct {
-	Aggregate       AttestationPhase0 `json:"aggregate,omitempty"`
-	AggregatorIndex string            `json:"aggregator_index,omitempty"`
-
-	// SelectionProof Bytes96 hexadecimal
-	SelectionProof string `json:"selection_proof,omitempty"`
-}
-
 // AggregateAndProofRequest defines model for AggregateAndProofRequest.
 type AggregateAndProofRequest struct {
 	AggregateAndProof AggregateAndProofRequest_AggregateAndProof `json:"aggregate_and_proof"`
@@ -520,26 +472,6 @@ type AggregateAndProofRequestPhase0 struct {
 // AggregateAndProofRequestPhase0Version version to identify AggregateAndProof request type.
 type AggregateAndProofRequestPhase0Version string
 
-// AggregateAndProofSigning defines model for AggregateAndProofSigning.
-type AggregateAndProofSigning struct {
-	AggregateAndProof AggregateAndProofPhase0 `json:"aggregate_and_proof"`
-	ForkInfo          struct {
-		Fork Fork `json:"fork"`
-
-		// GenesisValidatorsRoot Genesis Validators Root in hex string format.
-		GenesisValidatorsRoot string `json:"genesis_validators_root"`
-	} `json:"fork_info"`
-
-	// SigningRoot signing root for optional verification if field present
-	SigningRoot string `json:"signingRoot,omitempty"`
-
-	// Type Signing Request type
-	Type AggregateAndProofSigningType `json:"type"`
-}
-
-// AggregateAndProofSigningType Signing Request type
-type AggregateAndProofSigningType string
-
 // AggregateAndProofSigningV2 defines model for AggregateAndProofSigningV2.
 type AggregateAndProofSigningV2 struct {
 	AggregateAndProof AggregateAndProofSigningV2_AggregateAndProof `json:"aggregate_and_proof"`
@@ -587,15 +519,6 @@ type AggregationSlotSigning struct {
 // AggregationSlotSigningType Signing Request type
 type AggregationSlotSigningType string
 
-// AttestationData defines model for AttestationData.
-type AttestationData struct {
-	BeaconBlockRoot string     `json:"beacon_block_root,omitempty"`
-	Index           string     `json:"index,omitempty"`
-	Slot            string     `json:"slot,omitempty"`
-	Source          Checkpoint `json:"source,omitempty"`
-	Target          Checkpoint `json:"target,omitempty"`
-}
-
 // AttestationElectra defines model for AttestationElectra.
 type AttestationElectra struct {
 	AggregationBits string          `json:"aggregation_bits,omitempty"`
@@ -637,38 +560,6 @@ type AttesterSlashing struct {
 	Attestation2 IndexedAttestation `json:"attestation_2,omitempty"`
 }
 
-// BeaconBlock defines model for BeaconBlock.
-type BeaconBlock struct {
-	Body          BeaconBlockBody `json:"body,omitempty"`
-	ParentRoot    string          `json:"parent_root,omitempty"`
-	ProposerIndex string          `json:"proposer_index,omitempty"`
-	Slot          string          `json:"slot,omitempty"`
-	StateRoot     string          `json:"state_root,omitempty"`
-}
-
-// BeaconBlockAltair defines model for BeaconBlockAltair.
-type BeaconBlockAltair struct {
-	Body          BeaconBlockBodyAltair `json:"body,omitempty"`
-	ParentRoot    string                `json:"parent_root,omitempty"`
-	ProposerIndex string                `json:"proposer_index,omitempty"`
-	Slot          string                `json:"slot,omitempty"`
-	StateRoot     string                `json:"state_root,omitempty"`
-}
-
-// BeaconBlockBody defines model for BeaconBlockBody.
-type BeaconBlockBody struct {
-	Attestations      []AttestationPhase0 `json:"attestations,omitempty"`
-	AttesterSlashings []AttesterSlashing  `json:"attester_slashings,omitempty"`
-	Deposits          []Deposit           `json:"deposits,omitempty"`
-	Eth1Data          Eth1Data            `json:"eth1_data,omitempty"`
-
-	// Graffiti Bytes32 hexadecimal
-	Graffiti          string                `json:"graffiti,omitempty"`
-	ProposerSlashings []ProposerSlashing    `json:"proposer_slashings,omitempty"`
-	RandaoReveal      string                `json:"randao_reveal,omitempty"`
-	VoluntaryExits    []SignedVoluntaryExit `json:"voluntary_exits,omitempty"`
-}
-
 // BeaconBlockBodyAltair defines model for BeaconBlockBodyAltair.
 type BeaconBlockBodyAltair struct {
 	Attestations      []AttestationPhase0 `json:"attestations,omitempty"`
@@ -682,20 +573,6 @@ type BeaconBlockBodyAltair struct {
 	RandaoReveal      string                `json:"randao_reveal,omitempty"`
 	SyncAggregate     SyncAggregate         `json:"sync_aggregate,omitempty"`
 	VoluntaryExits    []SignedVoluntaryExit `json:"voluntary_exits,omitempty"`
-}
-
-// BeaconBlockHeader defines model for BeaconBlockHeader.
-type BeaconBlockHeader struct {
-	// BodyRoot Bytes32 hexadecimal
-	BodyRoot string `json:"body_root,omitempty"`
-
-	// ParentRoot Bytes32 hexadecimal
-	ParentRoot    string `json:"parent_root,omitempty"`
-	ProposerIndex string `json:"proposer_index,omitempty"`
-	Slot          string `json:"slot,omitempty"`
-
-	// StateRoot Bytes32 hexadecimal
-	StateRoot string `json:"state_root,omitempty"`
 }
 
 // BeaconBlockRequest defines model for BeaconBlockRequest.
@@ -809,26 +686,6 @@ type BlockRequestPhase0 struct {
 
 // BlockRequestPhase0Version version to identify block request type.
 type BlockRequestPhase0Version string
-
-// BlockSigning defines model for BlockSigning.
-type BlockSigning struct {
-	Block    BeaconBlock `json:"block"`
-	ForkInfo struct {
-		Fork Fork `json:"fork"`
-
-		// GenesisValidatorsRoot Genesis Validators Root in hex string format.
-		GenesisValidatorsRoot string `json:"genesis_validators_root"`
-	} `json:"fork_info"`
-
-	// SigningRoot signing root for optional verification if field present
-	SigningRoot string `json:"signingRoot,omitempty"`
-
-	// Type Signing Request type
-	Type BlockSigningType `json:"type"`
-}
-
-// BlockSigningType Signing Request type
-type BlockSigningType string
 
 // Checkpoint defines model for Checkpoint.
 type Checkpoint struct {
@@ -968,12 +825,6 @@ type SyncAggregate struct {
 	SyncCommitteeSignature string `json:"sync_committee_signature,omitempty"`
 }
 
-// SyncAggregatorSelectionData defines model for SyncAggregatorSelectionData.
-type SyncAggregatorSelectionData struct {
-	Slot              string `json:"slot,omitempty"`
-	SubcommitteeIndex string `json:"subcommittee_index,omitempty"`
-}
-
 // SyncCommitteeContribution defines model for SyncCommitteeContribution.
 type SyncCommitteeContribution struct {
 	// AggregationBits SSZ hexadecimal
@@ -1007,13 +858,6 @@ type SyncCommitteeContributionAndProofSigning struct {
 
 // SyncCommitteeContributionAndProofSigningType Signing Request type
 type SyncCommitteeContributionAndProofSigningType string
-
-// SyncCommitteeMessage defines model for SyncCommitteeMessage.
-type SyncCommitteeMessage struct {
-	// BeaconBlockRoot Bytes32 hexadecimal
-	BeaconBlockRoot string `json:"beacon_block_root,omitempty"`
-	Slot            string `json:"slot,omitempty"`
-}
 
 // SyncCommitteeMessageSigning defines model for SyncCommitteeMessageSigning.
 type SyncCommitteeMessageSigning struct {
@@ -1067,12 +911,6 @@ type ValidatorRegistrationSigning struct {
 
 // ValidatorRegistrationSigningType Signing Request type
 type ValidatorRegistrationSigningType string
-
-// VoluntaryExit defines model for VoluntaryExit.
-type VoluntaryExit struct {
-	Epoch          string `json:"epoch,omitempty"`
-	ValidatorIndex string `json:"validator_index,omitempty"`
-}
 
 // VoluntaryExitSigning defines model for VoluntaryExitSigning.
 type VoluntaryExitSigning struct {

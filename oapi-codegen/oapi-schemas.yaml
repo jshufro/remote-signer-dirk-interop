@@ -6,5 +6,18 @@ output-options:
   skip-prune: true
   prefer-skip-optional-pointer: true
   exclude-schemas:
+    - "AggregateAndProofPhase0"
+    - "AggregateAndProofElectra"
+    - "AttestationData"
+    - "BeaconBlock"
+    - "BeaconBlockAltair"
+    - "BeaconBlockHeader"
+    - "BeaconBlockBody"
+    - "VoluntaryExit"
+    - "SyncCommitteeMessage"
+    - "SyncAggregatorSelectionData"
     - "ContributionAndProof"
     - "ValidatorRegistration"
+    # Deprecated schemas
+    - "BlockSigning"
+    - "AggregateAndProofSigning"

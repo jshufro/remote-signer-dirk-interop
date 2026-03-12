@@ -1,7 +1,21 @@
 imports: 
+  - path: "github.com/attestantio/go-eth2-client/spec/phase0"
+  - path: "github.com/attestantio/go-eth2-client/spec/altair"
+  - path: "github.com/attestantio/go-eth2-client/spec/electra"
   - name: "apiv1"
     path: "github.com/attestantio/go-eth2-client/api/v1"
-  - path: "github.com/attestantio/go-eth2-client/spec/altair"
 types:
+  AggregateAndProofPhase0: phase0.AggregateAndProof
+  AggregateAndProofElectra: electra.AggregateAndProof
+  AttestationData: phase0.AttestationData
+  BeaconBlock: phase0.BeaconBlock
+  BeaconBlockAltair: altair.BeaconBlock
+  BeaconBlockHeader: phase0.BeaconBlockHeader
+  VoluntaryExit: phase0.VoluntaryExit
+  SyncCommitteeMessage: altair.SyncCommitteeMessage
+  SyncAggregatorSelectionData: altair.SyncAggregatorSelectionData
   ContributionAndProof: altair.ContributionAndProof
   ValidatorRegistration: apiv1.ValidatorRegistration
+deprecated-types:
+  - BlockSigning
+  - AggregateAndProofSigning

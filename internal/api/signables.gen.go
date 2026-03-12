@@ -10,18 +10,27 @@ import (
 
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/electra"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
+type AggregateAndProofPhase0 = phase0.AggregateAndProof
+type AggregateAndProofElectra = electra.AggregateAndProof
+type AttestationData = phase0.AttestationData
+type BeaconBlockAltair = altair.BeaconBlock
+type VoluntaryExit = phase0.VoluntaryExit
 type ContributionAndProof = altair.ContributionAndProof
+type BeaconBlock = phase0.BeaconBlock
+type BeaconBlockHeader = phase0.BeaconBlockHeader
+type SyncCommitteeMessage = altair.SyncCommitteeMessage
+type SyncAggregatorSelectionData = altair.SyncAggregatorSelectionData
 type ValidatorRegistration = apiv1.ValidatorRegistration
 
 // Signer combines all signable request types from the remote signing API.
 type Signer interface {
 	AggregationSlotSigning(context.Context, [48]byte, *AggregationSlotSigning) ([96]byte, *errors.SignerError)
-	AggregateAndProofSigning(context.Context, [48]byte, *AggregateAndProofSigning) ([96]byte, *errors.SignerError)
 	AggregateAndProofSigningV2(context.Context, [48]byte, *AggregateAndProofSigningV2) ([96]byte, *errors.SignerError)
 	AttestationSigning(context.Context, [48]byte, *AttestationSigning) ([96]byte, *errors.SignerError)
-	BlockSigning(context.Context, [48]byte, *BlockSigning) ([96]byte, *errors.SignerError)
 	BeaconBlockSigning(context.Context, [48]byte, *BeaconBlockSigning) ([96]byte, *errors.SignerError)
 	DepositSigning(context.Context, [48]byte, *DepositSigning) ([96]byte, *errors.SignerError)
 	RandaoRevealSigning(context.Context, [48]byte, *RandaoRevealSigning) ([96]byte, *errors.SignerError)
@@ -35,16 +44,12 @@ type Signer interface {
 // StringToSignableType converts a discriminator string to a signable type.
 func StringToSignableType(discriminator string) (any, error) {
 	switch discriminator {
-	case "AGGREGATE_AND_PROOF":
-		return &AggregateAndProofSigning{}, nil
 	case "AGGREGATE_AND_PROOF_V2":
 		return &AggregateAndProofSigningV2{}, nil
 	case "AGGREGATION_SLOT":
 		return &AggregationSlotSigning{}, nil
 	case "ATTESTATION":
 		return &AttestationSigning{}, nil
-	case "BLOCK":
-		return &BlockSigning{}, nil
 	case "BLOCK_V2":
 		return &BeaconBlockSigning{}, nil
 	case "DEPOSIT":
@@ -71,14 +76,10 @@ func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) 
 	switch signable := signable.(type) {
 	case *AggregationSlotSigning:
 		return signer.AggregationSlotSigning(ctx, publicKey, signable)
-	case *AggregateAndProofSigning:
-		return signer.AggregateAndProofSigning(ctx, publicKey, signable)
 	case *AggregateAndProofSigningV2:
 		return signer.AggregateAndProofSigningV2(ctx, publicKey, signable)
 	case *AttestationSigning:
 		return signer.AttestationSigning(ctx, publicKey, signable)
-	case *BlockSigning:
-		return signer.BlockSigning(ctx, publicKey, signable)
 	case *BeaconBlockSigning:
 		return signer.BeaconBlockSigning(ctx, publicKey, signable)
 	case *DepositSigning:

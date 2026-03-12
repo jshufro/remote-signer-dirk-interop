@@ -23,8 +23,9 @@ type Import struct {
 }
 
 type Mappings struct {
-	Imports []Import          `yaml:"imports"`
-	Types   map[string]string `yaml:"types"`
+	Imports         []Import          `yaml:"imports"`
+	Types           map[string]string `yaml:"types"`
+	DeprecatedTypes []string          `yaml:"deprecated-types"`
 }
 
 func (i Import) String() string {
@@ -213,6 +214,11 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 		customImports = append(customImports, importItem.String())
 	}
 
+	skipTypes := make(map[string]any)
+	for _, typeItem := range mappings.DeprecatedTypes {
+		skipTypes[typeItem] = struct{}{}
+	}
+
 	write := func(s string) {
 		if _, err := buf.WriteString(s); err != nil {
 			// bytes.Buffer.WriteString currently never returns an error,
@@ -248,6 +254,9 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	write("// Signer combines all signable request types from the remote signing API.\n")
 	write("type Signer interface {\n")
 	for _, name := range schemaNames {
+		if _, ok := skipTypes[name]; ok {
+			continue
+		}
 		writef("\t%s(context.Context, [48]byte, *%s) ([96]byte, *errors.SignerError)\n", name, name)
 	}
 	write("}\n")
@@ -263,6 +272,9 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 
 	for _, discriminator := range discriminators {
 		name := discriminatorsToTypes[discriminator]
+		if _, ok := skipTypes[name]; ok {
+			continue
+		}
 		writef("\tcase %q:\n", discriminator)
 		writef("\t\treturn &%s{}, nil\n", name)
 	}
@@ -277,6 +289,9 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	write("\tswitch signable := signable.(type) {\n")
 
 	for _, name := range schemaNames {
+		if _, ok := skipTypes[name]; ok {
+			continue
+		}
 		writef("\tcase *%s:\n", name)
 		writef("\t\treturn signer.%s(ctx, publicKey, signable)\n", name)
 	}
