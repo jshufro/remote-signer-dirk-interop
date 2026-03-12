@@ -27,7 +27,7 @@ const (
 
 func (e *signerError) Error() string {
 	if e.Message == nil {
-		return fmt.Sprintf("%s", e.Code)
+		return e.Code
 	}
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }

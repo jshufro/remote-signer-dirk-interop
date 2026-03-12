@@ -27,18 +27,18 @@ type ValidatorRegistration = apiv1.ValidatorRegistration
 type VoluntaryExit = phase0.VoluntaryExit
 
 // Signer combines all signable request types from the remote signing API.
-type Signer interface {
-	AggregationSlotSigning(context.Context, [48]byte, *AggregationSlotSigning) ([96]byte, errors.SignerError)
-	AggregateAndProofSigningV2(context.Context, [48]byte, *AggregateAndProofSigningV2) ([96]byte, errors.SignerError)
-	AttestationSigning(context.Context, [48]byte, *AttestationSigning) ([96]byte, errors.SignerError)
-	BeaconBlockSigning(context.Context, [48]byte, *BeaconBlockSigning) ([96]byte, errors.SignerError)
-	DepositSigning(context.Context, [48]byte, *DepositSigning) ([96]byte, errors.SignerError)
-	RandaoRevealSigning(context.Context, [48]byte, *RandaoRevealSigning) ([96]byte, errors.SignerError)
-	VoluntaryExitSigning(context.Context, [48]byte, *VoluntaryExitSigning) ([96]byte, errors.SignerError)
-	SyncCommitteeMessageSigning(context.Context, [48]byte, *SyncCommitteeMessageSigning) ([96]byte, errors.SignerError)
-	SyncCommitteeSelectionProofSigning(context.Context, [48]byte, *SyncCommitteeSelectionProofSigning) ([96]byte, errors.SignerError)
-	SyncCommitteeContributionAndProofSigning(context.Context, [48]byte, *SyncCommitteeContributionAndProofSigning) ([96]byte, errors.SignerError)
-	ValidatorRegistrationSigning(context.Context, [48]byte, *ValidatorRegistrationSigning) ([96]byte, errors.SignerError)
+type Signer[AccountType any] interface {
+	AggregationSlotSigning(context.Context, AccountType, *AggregationSlotSigning) ([96]byte, error)
+	AggregateAndProofSigningV2(context.Context, AccountType, *AggregateAndProofSigningV2) ([96]byte, error)
+	AttestationSigning(context.Context, AccountType, *AttestationSigning) ([96]byte, error)
+	BeaconBlockSigning(context.Context, AccountType, *BeaconBlockSigning) ([96]byte, error)
+	DepositSigning(context.Context, AccountType, *DepositSigning) ([96]byte, error)
+	RandaoRevealSigning(context.Context, AccountType, *RandaoRevealSigning) ([96]byte, error)
+	VoluntaryExitSigning(context.Context, AccountType, *VoluntaryExitSigning) ([96]byte, error)
+	SyncCommitteeMessageSigning(context.Context, AccountType, *SyncCommitteeMessageSigning) ([96]byte, error)
+	SyncCommitteeSelectionProofSigning(context.Context, AccountType, *SyncCommitteeSelectionProofSigning) ([96]byte, error)
+	SyncCommitteeContributionAndProofSigning(context.Context, AccountType, *SyncCommitteeContributionAndProofSigning) ([96]byte, error)
+	ValidatorRegistrationSigning(context.Context, AccountType, *ValidatorRegistrationSigning) ([96]byte, error)
 }
 
 // StringToSignableType converts a discriminator string to a signable type.
@@ -72,30 +72,30 @@ func StringToSignableType(discriminator string) (any, error) {
 }
 
 // Sign calls the appropriate sign method based on the type of the signable.
-func Sign(ctx context.Context, signer Signer, publicKey [48]byte, signable any) ([96]byte, errors.SignerError) {
+func Sign[AccountType any](ctx context.Context, signer Signer[AccountType], account AccountType, signable any) ([96]byte, error) {
 	switch signable := signable.(type) {
 	case *AggregationSlotSigning:
-		return signer.AggregationSlotSigning(ctx, publicKey, signable)
+		return signer.AggregationSlotSigning(ctx, account, signable)
 	case *AggregateAndProofSigningV2:
-		return signer.AggregateAndProofSigningV2(ctx, publicKey, signable)
+		return signer.AggregateAndProofSigningV2(ctx, account, signable)
 	case *AttestationSigning:
-		return signer.AttestationSigning(ctx, publicKey, signable)
+		return signer.AttestationSigning(ctx, account, signable)
 	case *BeaconBlockSigning:
-		return signer.BeaconBlockSigning(ctx, publicKey, signable)
+		return signer.BeaconBlockSigning(ctx, account, signable)
 	case *DepositSigning:
-		return signer.DepositSigning(ctx, publicKey, signable)
+		return signer.DepositSigning(ctx, account, signable)
 	case *RandaoRevealSigning:
-		return signer.RandaoRevealSigning(ctx, publicKey, signable)
+		return signer.RandaoRevealSigning(ctx, account, signable)
 	case *VoluntaryExitSigning:
-		return signer.VoluntaryExitSigning(ctx, publicKey, signable)
+		return signer.VoluntaryExitSigning(ctx, account, signable)
 	case *SyncCommitteeMessageSigning:
-		return signer.SyncCommitteeMessageSigning(ctx, publicKey, signable)
+		return signer.SyncCommitteeMessageSigning(ctx, account, signable)
 	case *SyncCommitteeSelectionProofSigning:
-		return signer.SyncCommitteeSelectionProofSigning(ctx, publicKey, signable)
+		return signer.SyncCommitteeSelectionProofSigning(ctx, account, signable)
 	case *SyncCommitteeContributionAndProofSigning:
-		return signer.SyncCommitteeContributionAndProofSigning(ctx, publicKey, signable)
+		return signer.SyncCommitteeContributionAndProofSigning(ctx, account, signable)
 	case *ValidatorRegistrationSigning:
-		return signer.ValidatorRegistrationSigning(ctx, publicKey, signable)
+		return signer.ValidatorRegistrationSigning(ctx, account, signable)
 	default:
 		return [96]byte{}, errors.InternalServerError()
 	}

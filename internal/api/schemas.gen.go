@@ -687,12 +687,6 @@ type BlockRequestPhase0 struct {
 // BlockRequestPhase0Version version to identify block request type.
 type BlockRequestPhase0Version string
 
-// Checkpoint defines model for Checkpoint.
-type Checkpoint struct {
-	Epoch string `json:"epoch,omitempty"`
-	Root  string `json:"root,omitempty"`
-}
-
 // Deposit defines model for Deposit.
 type Deposit struct {
 	Data  DepositData `json:"data,omitempty"`
@@ -823,20 +817,6 @@ type SyncAggregate struct {
 
 	// SyncCommitteeSignature Bytes96 hexadecimal
 	SyncCommitteeSignature string `json:"sync_committee_signature,omitempty"`
-}
-
-// SyncCommitteeContribution defines model for SyncCommitteeContribution.
-type SyncCommitteeContribution struct {
-	// AggregationBits SSZ hexadecimal
-	AggregationBits string `json:"aggregation_bits,omitempty"`
-
-	// BeaconBlockRoot Bytes32 hexadecimal
-	BeaconBlockRoot string `json:"beacon_block_root,omitempty"`
-
-	// Signature Bytes96 hexadecimal
-	Signature         string `json:"signature,omitempty"`
-	Slot              string `json:"slot,omitempty"`
-	SubcommitteeIndex string `json:"subcommittee_index,omitempty"`
 }
 
 // SyncCommitteeContributionAndProofSigning defines model for SyncCommitteeContributionAndProofSigning.

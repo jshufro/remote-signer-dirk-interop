@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func decodeHex(hexStr string) ([]byte, errors.SignerError) {
+func decodeHex(hexStr string) ([]byte, error) {
 	bytes, err := hex.DecodeString(strings.TrimPrefix(hexStr, "0x"))
 	if err != nil {
 		return nil, errors.BadRequest("failed to decode hex: %w", err)

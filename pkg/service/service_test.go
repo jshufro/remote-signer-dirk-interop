@@ -16,60 +16,61 @@ import (
 )
 
 type fakeSigner struct {
-	lastCtx      context.Context
-	lastPubkey   [48]byte
-	lastSignable any
+}
+
+type fakeAccount struct {
 }
 
 // Type assertion to satisfy the signer.PublicKeysProvider interface
-var _ signer.RemoteSigner = (*fakeSigner)(nil)
+var _ signer.RemoteSigner[fakeAccount] = (*fakeSigner)(nil)
 
-func (f *fakeSigner) GetPublicKeys(ctx context.Context) ([][48]byte, errors.SignerError) {
+func (f *fakeSigner) GetPublicKeys(ctx context.Context) ([][48]byte, error) {
 	return [][48]byte{}, nil
 }
 
-func (f *fakeSigner) AggregationSlotSigning(ctx context.Context, pubkey [48]byte, obj *api.AggregationSlotSigning) ([96]byte, errors.SignerError) {
-	f.lastCtx = ctx
-	f.lastPubkey = pubkey
-	f.lastSignable = obj
+func (f *fakeSigner) GetAccountForPubkey(ctx context.Context, pubkey [48]byte) (fakeAccount, error) {
+	return fakeAccount{}, nil
+}
+
+func (f *fakeSigner) AggregationSlotSigning(ctx context.Context, pubkey fakeAccount, obj *api.AggregationSlotSigning) ([96]byte, error) {
 	return [96]byte{1}, nil
 }
 
 // Satisfy the api.Signer interface with stubs; not used in this test.
-func (f *fakeSigner) AggregateAndProofSigningV2(context.Context, [48]byte, *api.AggregateAndProofSigningV2) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) AggregateAndProofSigningV2(context.Context, fakeAccount, *api.AggregateAndProofSigningV2) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) AttestationSigning(context.Context, [48]byte, *api.AttestationSigning) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) AttestationSigning(context.Context, fakeAccount, *api.AttestationSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) BeaconBlockSigning(context.Context, [48]byte, *api.BeaconBlockSigning) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) BeaconBlockSigning(context.Context, fakeAccount, *api.BeaconBlockSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) DepositSigning(context.Context, [48]byte, *api.DepositSigning) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) DepositSigning(context.Context, fakeAccount, *api.DepositSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) RandaoRevealSigning(context.Context, [48]byte, *api.RandaoRevealSigning) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) RandaoRevealSigning(context.Context, fakeAccount, *api.RandaoRevealSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) VoluntaryExitSigning(context.Context, [48]byte, *api.VoluntaryExitSigning) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) VoluntaryExitSigning(context.Context, fakeAccount, *api.VoluntaryExitSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) SyncCommitteeMessageSigning(context.Context, [48]byte, *api.SyncCommitteeMessageSigning) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) SyncCommitteeMessageSigning(context.Context, fakeAccount, *api.SyncCommitteeMessageSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) SyncCommitteeSelectionProofSigning(context.Context, [48]byte, *api.SyncCommitteeSelectionProofSigning) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) SyncCommitteeSelectionProofSigning(context.Context, fakeAccount, *api.SyncCommitteeSelectionProofSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) SyncCommitteeContributionAndProofSigning(context.Context, [48]byte, *api.SyncCommitteeContributionAndProofSigning) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) SyncCommitteeContributionAndProofSigning(context.Context, fakeAccount, *api.SyncCommitteeContributionAndProofSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) ValidatorRegistrationSigning(context.Context, [48]byte, *api.ValidatorRegistrationSigning) ([96]byte, errors.SignerError) {
+func (f *fakeSigner) ValidatorRegistrationSigning(context.Context, fakeAccount, *api.ValidatorRegistrationSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
 
 func TestSIGN_Success(t *testing.T) {
 	fs := &fakeSigner{}
-	svc, err := NewService(fs, nil)
+	svc, err := NewService[fakeAccount](fs)
 	if err != nil {
 		t.Fatalf("NewService error: %v", err)
 	}

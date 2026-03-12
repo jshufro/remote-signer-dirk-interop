@@ -9,7 +9,11 @@ import (
 	"time"
 )
 
-type TLSProvider struct {
+type TLSProvider interface {
+	GetCertificate() (*tls.Certificate, error)
+}
+
+type tlsProvider struct {
 	threshold time.Duration
 	retry     time.Duration
 	certPath  string
@@ -22,8 +26,11 @@ type TLSProvider struct {
 	log *slog.Logger
 }
 
-func NewTLSProvider(certPath, keyPath string) *TLSProvider {
-	return &TLSProvider{
+// type assertion
+var _ TLSProvider = (*tlsProvider)(nil)
+
+func NewTLSProvider(certPath, keyPath string) *tlsProvider {
+	return &tlsProvider{
 		threshold: 24 * time.Hour,   // By default, refresh certificate when 24h remain
 		retry:     10 * time.Minute, // By default, retry every 10 minutes until the cert is fresh
 		certPath:  certPath,
@@ -32,23 +39,23 @@ func NewTLSProvider(certPath, keyPath string) *TLSProvider {
 	}
 }
 
-func (t *TLSProvider) SetLogger(log *slog.Logger) {
+func (t *tlsProvider) SetLogger(log *slog.Logger) {
 	t.log = log
 }
 
-func (t *TLSProvider) SetThreshold(threshold time.Duration) {
+func (t *tlsProvider) SetThreshold(threshold time.Duration) {
 	t.threshold = threshold
 }
 
-func (t *TLSProvider) SetRetry(retry time.Duration) {
+func (t *tlsProvider) SetRetry(retry time.Duration) {
 	t.retry = retry
 }
 
-func (t *TLSProvider) LoadCertificate() error {
+func (t *tlsProvider) LoadCertificate() error {
 	return t.loadCertificate()
 }
 
-func (t *TLSProvider) GetCertificate() (*tls.Certificate, error) {
+func (t *tlsProvider) GetCertificate() (*tls.Certificate, error) {
 	t.mu.RLock()
 	cert := t.cachedCert
 	if cert != nil {
@@ -84,7 +91,7 @@ func (t *TLSProvider) GetCertificate() (*tls.Certificate, error) {
 }
 
 // loadCertificate holds the write lock and loads the certificate from disk.
-func (t *TLSProvider) loadCertificate() error {
+func (t *tlsProvider) loadCertificate() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.loadCertificateUnlocked()
@@ -92,7 +99,7 @@ func (t *TLSProvider) loadCertificate() error {
 
 // loadCertificateUnlocked loads the certificate from disk and updates cachedCert and lastLoaded.
 // Caller must hold t.mu write lock.
-func (t *TLSProvider) loadCertificateUnlocked() error {
+func (t *tlsProvider) loadCertificateUnlocked() error {
 	t.log.Info("loading certificate", "cert_path", t.certPath, "key_path", t.keyPath)
 
 	cert, err := os.ReadFile(t.certPath)

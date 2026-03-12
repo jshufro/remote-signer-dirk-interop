@@ -1,0 +1,36 @@
+{
+    "type": "AGGREGATE_AND_PROOF_V2",
+    "fork_info": {
+        "fork": {
+            "previous_version": "0x01000000",
+            "current_version": "0x02000000",
+            "epoch": "100"
+        },
+        "genesis_validators_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa"
+    },
+    "aggregate_and_proof": {
+        "version": "ELECTRA",
+        "data": {
+            "aggregator_index": "100",
+            "selection_proof": "0xab372435c0a4725fd394815a9a24849c9c25af6b4d9b6d5c43dffc9cfb124a27059d17b5b5ab716efebf8c180912fdb70451eaaff7fdf3c289cdfa025166f6acb4d8b69f4ec87aea7186ec4bf5c36dec118b9d7c26b45c9ec892235e75fd3700",
+            "aggregate": {
+                "aggregation_bits": "0xFFFF",
+                "data": {
+                    "slot": "100",
+                    "index": "100",
+                    "beacon_block_root": "0x100814c335d0ced5014cfa9d2e375e6d9b4e197381f8ce8af0473200fdc917fd",
+                    "source": {
+                        "epoch": "100",
+                        "root": "0x100814c335d0ced5014cfa9d2e375e6d9b4e197381f8ce8af0473200fdc917fd"
+                    },
+                    "target": {
+                        "epoch": "100",
+                        "root": "0x100814c335d0ced5014cfa9d2e375e6d9b4e197381f8ce8af0473200fdc917fd"
+                    }
+                },
+                "signature": "0xab372435c0a4725fd394815a9a24849c9c25af6b4d9b6d5c43dffc9cfb124a27059d17b5b5ab716efebf8c180912fdb70451eaaff7fdf3c289cdfa025166f6acb4d8b69f4ec87aea7186ec4bf5c36dec118b9d7c26b45c9ec892235e75fd3700",
+                "committee_bits": "0xFFFF0000FFFF0000"
+            }
+        }
+    }
+}
