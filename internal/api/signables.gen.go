@@ -14,17 +14,17 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
-type AggregateAndProofPhase0 = phase0.AggregateAndProof
 type AggregateAndProofElectra = electra.AggregateAndProof
+type AggregateAndProofPhase0 = phase0.AggregateAndProof
 type AttestationData = phase0.AttestationData
-type BeaconBlockAltair = altair.BeaconBlock
-type VoluntaryExit = phase0.VoluntaryExit
-type ContributionAndProof = altair.ContributionAndProof
 type BeaconBlock = phase0.BeaconBlock
+type BeaconBlockAltair = altair.BeaconBlock
 type BeaconBlockHeader = phase0.BeaconBlockHeader
-type SyncCommitteeMessage = altair.SyncCommitteeMessage
+type ContributionAndProof = altair.ContributionAndProof
 type SyncAggregatorSelectionData = altair.SyncAggregatorSelectionData
+type SyncCommitteeMessage = altair.SyncCommitteeMessage
 type ValidatorRegistration = apiv1.ValidatorRegistration
+type VoluntaryExit = phase0.VoluntaryExit
 
 // Signer combines all signable request types from the remote signing API.
 type Signer interface {

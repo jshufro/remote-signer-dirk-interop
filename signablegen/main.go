@@ -247,8 +247,13 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	}
 	write(")\n")
 	write("\n")
+	aliases := []string{}
 	for from, to := range mappings.Types {
-		writef("type %s = %s\n", from, to)
+		aliases = append(aliases, fmt.Sprintf("type %s = %s\n", from, to))
+	}
+	slices.Sort(aliases)
+	for _, alias := range aliases {
+		write(alias)
 	}
 	write("\n")
 	write("// Signer combines all signable request types from the remote signing API.\n")
