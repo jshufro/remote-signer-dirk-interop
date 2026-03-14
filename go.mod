@@ -1,8 +1,9 @@
 module github.com/jshufro/remote-signer-dirk-interop
 
-go 1.25.1
+go 1.25.8
 
 require (
+	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
 	github.com/OffchainLabs/prysm/v7 v7.1.2
 	github.com/attestantio/dirk v1.2.1
 	github.com/attestantio/go-eth2-client v0.28.0
@@ -26,7 +27,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.2.1 // indirect
 	cloud.google.com/go/secretmanager v1.14.1 // indirect
-	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/aws/aws-sdk-go v1.55.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
