@@ -142,12 +142,19 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 
 // writeJSON serializes v as JSON and writes it with the given status code.
 func (s *Service[AccountType]) writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
 	if v == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
 		return
 	}
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	out := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(out).Encode(v); err != nil {
+		s.log.Warn("failed to write JSON response", "error", err)
+		s.writeErrorJSON(w, errors.InternalServerError())
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if _, err := io.Copy(w, out); err != nil {
 		s.log.Warn("failed to write JSON response", "error", err)
 	}
 }
