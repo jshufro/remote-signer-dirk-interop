@@ -2,7 +2,6 @@ package test
 
 import (
 	"bytes"
-	"crypto/tls"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -22,7 +21,7 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/service"
-	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
+	tlstest "github.com/jshufro/remote-signer-dirk-interop/pkg/tls/test"
 	"github.com/jshufro/remote-signer-dirk-interop/test/client"
 	"github.com/neilotoole/slogt"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
@@ -32,28 +31,6 @@ func init() {
 	err := bls.Init(bls.BLS12_381)
 	if err != nil {
 		panic(err)
-	}
-}
-
-type mockTLSProvider struct {
-	cert *tls.Certificate
-}
-
-func (m *mockTLSProvider) GetCertificate() (*tls.Certificate, error) {
-	return m.cert, nil
-}
-
-func newMockTLSProvider(client Client) tlsprovider.TLSProvider {
-	cert, key, err := ClientCertPair(client)
-	if err != nil {
-		panic(err)
-	}
-	certPair, err := tls.X509KeyPair(cert, key)
-	if err != nil {
-		panic(err)
-	}
-	return &mockTLSProvider{
-		cert: &certPair,
 	}
 }
 
@@ -128,8 +105,8 @@ func newDirkSigner(t *testing.T, endpoints []*e2wd.Endpoint, logger *slog.Logger
 		[]byte{0x00, 0x00, 0x00, 0x00},
 		endpoints,
 		"Wallet 1",
-		CAPool(),
-		newMockTLSProvider(ClientTest01),
+		tlstest.CAPool(),
+		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
 		logger,
 	)
 

@@ -10,7 +10,7 @@ import (
 )
 
 type TLSProvider interface {
-	GetCertificate() (*tls.Certificate, error)
+	GetClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 }
 
 type tlsProvider struct {
@@ -55,7 +55,7 @@ func (t *tlsProvider) LoadCertificate() error {
 	return t.loadCertificate()
 }
 
-func (t *tlsProvider) GetCertificate() (*tls.Certificate, error) {
+func (t *tlsProvider) GetClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 	t.mu.RLock()
 	cert := t.cachedCert
 	if cert != nil {

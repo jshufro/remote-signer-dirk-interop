@@ -2,11 +2,9 @@ package dirksigner
 
 import (
 	"encoding/hex"
-	"log/slog"
 	"strings"
 
 	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
-	"github.com/rs/zerolog"
 )
 
 func decodeHex(hexStr string) ([]byte, error) {
@@ -15,18 +13,4 @@ func decodeHex(hexStr string) ([]byte, error) {
 		return nil, errors.BadRequest("failed to decode hex: %w", err)
 	}
 	return bytes, nil
-}
-
-func slogLevelToZerologLevel(level slog.Level) zerolog.Level {
-	switch level {
-	case slog.LevelDebug:
-		return zerolog.DebugLevel
-	case slog.LevelInfo:
-		return zerolog.InfoLevel
-	case slog.LevelWarn:
-		return zerolog.WarnLevel
-	case slog.LevelError:
-		return zerolog.ErrorLevel
-	}
-	return zerolog.TraceLevel
 }

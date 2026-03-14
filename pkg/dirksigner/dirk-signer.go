@@ -2,13 +2,13 @@ package dirksigner
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -17,10 +17,9 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
 	"github.com/jshufro/remote-signer-dirk-interop/internal/domains"
 	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
-	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner/accountcache"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner/dirk"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
-	"google.golang.org/grpc/credentials"
 
 	e2t "github.com/wealdtech/go-eth2-types/v2"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
@@ -29,14 +28,14 @@ import (
 
 type DirkSigner struct {
 	genesisForkVersion []byte
-	wallet             e2wt.Wallet
 	endpoints          []*e2wd.Endpoint
 	walletName         string
 	rootCA             *x509.CertPool
 	tlsProvider        tlsprovider.TLSProvider
 	log                *slog.Logger
 
-	accountsCache accountcache.AccountCache
+	dirk     dirk.DirkSigner
+	accounts sync.Map
 }
 
 func init() {
@@ -67,69 +66,48 @@ func NewDirkSigner(
 		rootCA:             rootCA,
 		tlsProvider:        tlsProvider,
 		log:                log,
-		accountsCache:      accountcache.AccountCache{},
+		accounts:           sync.Map{},
 	}
 }
 
 func (d *DirkSigner) Open(ctx context.Context, logLevel slog.Level) error {
-	tlsConfig := &tls.Config{
-		GetClientCertificate: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-			cert, err := d.tlsProvider.GetCertificate()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get certificate: %w", err)
-			}
-			return cert, nil
-		},
-	}
-	if d.rootCA != nil {
-		tlsConfig.RootCAs = d.rootCA
-	}
-	zerologLevel := slogLevelToZerologLevel(logLevel)
-	credentials := credentials.NewTLS(tlsConfig)
 	var err error
-	d.wallet, err = e2wd.Open(ctx,
-		e2wd.WithName(d.walletName),
-		e2wd.WithEndpoints(d.endpoints),
-		e2wd.WithCredentials(credentials),
-		e2wd.WithLogLevel(zerologLevel),
-	)
+	d.dirk, err = dirk.NewDirk(ctx, d.walletName, d.endpoints, d.tlsProvider, d.rootCA, logLevel)
 	if err != nil {
-		return fmt.Errorf("failed to open wallet: %w", err)
+		return fmt.Errorf("failed to create dirk: %w", err)
 	}
 
-	// While we're here, prime the cache
-	_, err = d.GetPublicKeys(ctx)
-	if err != nil {
-		fmt.Printf("address: %p value: %+v\n", err, err)
-		return fmt.Errorf("failed to get public keys: %w", err)
+	// Prime the account pubkey map
+	_ = d.getPublicKeys(ctx)
+	return nil
+}
+
+func (d *DirkSigner) getPublicKeys(ctx context.Context) [][48]byte {
+	accounts := d.dirk.GetAccounts(ctx)
+	out := make([][48]byte, 0)
+	for _, account := range accounts {
+		pubkey := account.PublicKey()
+		pubkeyBytes := ([48]byte)(pubkey.Marshal())
+		out = append(out, pubkeyBytes)
+		d.accounts.Store(pubkeyBytes, account)
 	}
-	return err
+	return out
 }
 
 func (d *DirkSigner) GetPublicKeys(ctx context.Context) ([][48]byte, error) {
 
-	accounts := d.wallet.Accounts(ctx)
-	out := make([][48]byte, 0)
-	for account := range accounts {
-		var pubkey e2t.PublicKey
-		// Check if it's a distributed account
-		if distributedAccount, ok := account.(e2wt.AccountCompositePublicKeyProvider); ok {
-			pubkey = distributedAccount.CompositePublicKey()
-		} else {
-			pubkey = account.PublicKey()
-		}
-		pubkeyBytes := ([48]byte)(pubkey.Marshal())
-		d.accountsCache.Set(pubkeyBytes, account)
-		out = append(out, pubkeyBytes)
-	}
-
-	return out, nil
+	return d.getPublicKeys(ctx), nil
 }
 
 func (d *DirkSigner) GetAccountForPubkey(ctx context.Context, pubkey [48]byte) (e2wt.AccountProtectingSigner, error) {
-	account := d.accountsCache.Get(pubkey)
-	if account != nil {
-		return account.(e2wt.AccountProtectingSigner), nil
+	account, ok := d.accounts.Load(pubkey)
+	if ok {
+		aps, ok := account.(e2wt.AccountProtectingSigner)
+		if !ok {
+			d.log.Warn("account is not a protecting signer", "pubkey", hex.EncodeToString(pubkey[:]))
+			return nil, errors.BadRequest("account is not a protecting signer")
+		}
+		return aps, nil
 	}
 
 	return nil, errors.PublicKeyNotFound("account not found for pubkey: %s", hex.EncodeToString(pubkey[:]))

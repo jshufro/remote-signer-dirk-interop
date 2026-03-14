@@ -49,6 +49,7 @@ coverage.out: remote-signer-dirk-interop-dependencies
 	$(DOCKER_TEST_CMD) -coverpkg=./... -coverprofile=coverage.out
 	sed -i '/\.gen\.go/d' coverage.out
 	sed -i '/$(PKG)\/test/d' coverage.out
+	sed -i '/$(PKG)\/pkg\/tls\/test/d' coverage.out
 	sed -i '/$(PKG)\/main.go/d' coverage.out
 	sed -i '/$(PKG)\/signablegen/d' coverage.out
 

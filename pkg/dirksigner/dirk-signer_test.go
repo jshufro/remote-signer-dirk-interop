@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
+	tlstest "github.com/jshufro/remote-signer-dirk-interop/pkg/tls/test"
 	e2t "github.com/wealdtech/go-eth2-types/v2"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
 )
@@ -18,7 +19,7 @@ func TestNilLogger(t *testing.T) {
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
-		nil,
+		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
 		nil,
 	)
 	if dirk.log != slog.Default() {
@@ -55,7 +56,7 @@ func TestReturnSignatureError(t *testing.T) {
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
-		nil,
+		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
 		nil,
 	)
 
@@ -72,7 +73,7 @@ func TestEmptyEndpointsError(t *testing.T) {
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
-		nil,
+		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
 		nil,
 	)
 

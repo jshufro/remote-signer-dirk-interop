@@ -129,7 +129,7 @@ func TestLoadCertificateSuccessAndGetCertificateCaches(t *testing.T) {
 	}
 
 	// GetCertificate should return the same cached cert without reloading.
-	got, err := p.GetCertificate()
+	got, err := p.GetClientCertificate(nil)
 	if err != nil {
 		t.Fatalf("GetCertificate failed: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestGetCertificateConcurrentLoadWhenEmpty(t *testing.T) {
 
 	p := NewTLSProvider(certPath, keyPath)
 
-	got, err := p.GetCertificate()
+	got, err := p.GetClientCertificate(nil)
 	if err != nil {
 		t.Fatalf("GetCertificate failed: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestGetCertificateConcurrentLoadWhenEmpty(t *testing.T) {
 	}
 
 	// Subsequent call should still return a valid cert without error.
-	got2, err := p.GetCertificate()
+	got2, err := p.GetClientCertificate(nil)
 	if err != nil {
 		t.Fatalf("GetCertificate (second) failed: %v", err)
 	}
@@ -278,14 +278,14 @@ func TestGetCertificateTriggersAsyncReloadWhenExpiringSoon(t *testing.T) {
 		p.mu.Unlock()
 		t.Fatalf("expected cached certificate with Leaf set")
 	}
-	p.cachedCert.Leaf.NotAfter = time.Now().Add(30 * time.Minute)      // less than threshold
-	p.lastLoaded = time.Now().Add(-2 * time.Hour)                      // older than retry
-	cachedBefore := p.cachedCert                                       // keep pointer for sanity
+	p.cachedCert.Leaf.NotAfter = time.Now().Add(30 * time.Minute) // less than threshold
+	p.lastLoaded = time.Now().Add(-2 * time.Hour)                 // older than retry
+	cachedBefore := p.cachedCert                                  // keep pointer for sanity
 	p.mu.Unlock()
 
 	// Call GetCertificate, which should return the cached cert and start a
 	// background reload because of the threshold logic.
-	got, err := p.GetCertificate()
+	got, err := p.GetClientCertificate(nil)
 	if err != nil {
 		t.Fatalf("GetCertificate failed: %v", err)
 	}
@@ -311,4 +311,3 @@ func TestGetCertificateTriggersAsyncReloadWhenExpiringSoon(t *testing.T) {
 		}
 	}
 }
-

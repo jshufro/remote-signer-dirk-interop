@@ -1,4 +1,4 @@
-package dirksigner
+package dirk
 
 import (
 	"log/slog"
