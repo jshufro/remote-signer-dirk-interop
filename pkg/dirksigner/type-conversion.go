@@ -2,9 +2,7 @@ package dirksigner
 
 import (
 	"encoding/hex"
-	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 
 	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
@@ -30,6 +28,5 @@ func slogLevelToZerologLevel(level slog.Level) zerolog.Level {
 	case slog.LevelError:
 		return zerolog.ErrorLevel
 	}
-	fmt.Fprintf(os.Stderr, "invalid zerolog level %d, defaulting to trace\n", level)
 	return zerolog.TraceLevel
 }
