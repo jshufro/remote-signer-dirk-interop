@@ -1,0 +1,21 @@
+{
+    "type": "BLOCK_V2",
+    "fork_info": {
+        "fork": {
+            "previous_version": "0x01000000",
+            "current_version": "0x02000000",
+            "epoch": "100"
+        },
+        "genesis_validators_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa"
+    },
+    "beacon_block": {
+        "version": "ELECTRA",
+        "block_header": {
+            "slot": "105",
+            "proposer_index": "42",
+            "parent_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa",
+            "state_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa",
+            "body_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa"
+        }
+    }
+}

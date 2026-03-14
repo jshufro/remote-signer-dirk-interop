@@ -7,26 +7,25 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
+	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 )
 
-type Service struct {
-	signer  signer.RemoteSigner
+type Service[AccountType any] struct {
+	signer  signer.RemoteSigner[AccountType]
 	timeout time.Duration
 	log     *slog.Logger
 }
 
-func NewService(
-	signer signer.RemoteSigner,
-	listener net.Listener,
-) (*Service, error) {
-	out := &Service{
+func NewService[AccountType any](
+	signer signer.RemoteSigner[AccountType],
+) (*Service[AccountType], error) {
+	out := &Service[AccountType]{
 		signer: signer,
 		log:    slog.Default(),
 	}
@@ -34,15 +33,15 @@ func NewService(
 	return out, nil
 }
 
-func (s *Service) SetLogger(log *slog.Logger) {
+func (s *Service[AccountType]) SetLogger(log *slog.Logger) {
 	s.log = log
 }
 
-func (s *Service) SetTimeout(timeout time.Duration) {
+func (s *Service[AccountType]) SetTimeout(timeout time.Duration) {
 	s.timeout = timeout
 }
 
-func (s *Service) PUBLICKEYLIST(w http.ResponseWriter, r *http.Request) {
+func (s *Service[AccountType]) PUBLICKEYLIST(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("PUBLICKEYLIST request", "path", r.URL.Path)
 	ctx := r.Context()
 	if s.timeout > 0 {
@@ -54,7 +53,7 @@ func (s *Service) PUBLICKEYLIST(w http.ResponseWriter, r *http.Request) {
 	keys, err := s.signer.GetPublicKeys(ctx)
 	if err != nil {
 		s.log.Error("failed to get public keys", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		s.writeErrorJSON(w, err)
 		return
 	}
 
@@ -62,26 +61,14 @@ func (s *Service) PUBLICKEYLIST(w http.ResponseWriter, r *http.Request) {
 	for i, key := range keys {
 		resp[i] = "0x" + hex.EncodeToString(key[:])
 	}
-	respBody, err := json.Marshal(resp)
-	if err != nil {
-		s.log.Error("failed to marshal response", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	_, err = w.Write(respBody)
-	if err != nil {
-		s.log.Error("failed to write response", "error", err)
-		return
-	}
+	s.writeJSON(w, http.StatusOK, resp)
 }
 
 type GenericBody struct {
 	Type string `json:"type"`
 }
 
-func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string) {
+func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, identifier string) {
 	s.log.Info("SIGN request", "path", r.URL.Path, "identifier", identifier)
 	ctx := r.Context()
 	if s.timeout > 0 {
@@ -95,10 +82,16 @@ func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string
 	pubkeySlice, err := hex.DecodeString(identifier)
 	if err != nil || len(pubkeySlice) != 48 {
 		s.log.Error("failed to decode public key", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		s.writeErrorJSON(w, errors.BadRequest("invalid identifier; expected 0x-prefixed 48-byte compressed BLS public key: %w", err))
 		return
 	}
 	pubkey := [48]byte(pubkeySlice)
+	account, err := s.signer.GetAccountForPubkey(ctx, pubkey)
+	if err != nil {
+		s.log.Error("failed to get account for pubkey", "error", err, "pubkey", identifier)
+		s.writeErrorJSON(w, err)
+		return
+	}
 
 	bodyCopy := bytes.NewBuffer(nil)
 	// Create a tee reader from the request body to the copy
@@ -109,7 +102,7 @@ func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string
 	err = json.NewDecoder(teeReader).Decode(&genericBody)
 	if err != nil {
 		s.log.Error("failed to decode request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		s.writeErrorJSON(w, errors.BadRequest("failed to decode request body: %w", err))
 		return
 	}
 
@@ -117,7 +110,7 @@ func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string
 	signable, err := api.StringToSignableType(genericBody.Type)
 	if err != nil {
 		s.log.Error("failed to get signable type", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		s.writeErrorJSON(w, errors.BadRequest("unknown signing type: %w", err))
 		return
 	}
 
@@ -127,15 +120,15 @@ func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string
 	err = json.NewDecoder(bodyCopy).Decode(signable)
 	if err != nil {
 		s.log.Error("failed to unmarshal request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		s.writeErrorJSON(w, errors.BadRequest("failed to unmarshal request body: %w", err))
 		return
 	}
 
 	// Sign the object
-	signature, signerErr := api.Sign(ctx, s.signer, pubkey, signable)
+	signature, signerErr := api.Sign(ctx, s.signer, account, signable)
 	if signerErr != nil {
 		s.log.Error("failed to sign object", "error", signerErr.Error())
-		w.WriteHeader(signerErr.HttpCode)
+		s.writeErrorJSON(w, signerErr)
 		return
 	}
 
@@ -144,17 +137,30 @@ func (s *Service) SIGN(w http.ResponseWriter, r *http.Request, identifier string
 		Signature: "0x" + hex.EncodeToString(signature[:]),
 	}
 
-	// Serialize the response to the writer
-	respBody, err := json.Marshal(response)
-	if err != nil {
-		s.log.Error("failed to marshal response", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+	s.writeJSON(w, http.StatusOK, response)
+}
+
+// writeJSON serializes v as JSON and writes it with the given status code.
+func (s *Service[AccountType]) writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if v == nil {
 		return
 	}
-
-	w.WriteHeader(http.StatusOK)
-	_, err = w.Write(respBody)
-	if err != nil {
-		s.log.Error("failed to write response", "error", err)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		s.log.Warn("failed to write JSON response", "error", err)
 	}
+}
+
+// writeErrorJSON writes a structured JSON error response.
+func (s *Service[AccountType]) writeErrorJSON(w http.ResponseWriter, err error) {
+	if signerErr, ok := err.(errors.SignerError); ok {
+		s.writeJSON(w, signerErr.HttpCode, map[string]any{
+			"error": signerErr.Error(),
+		})
+		return
+	}
+	s.writeJSON(w, http.StatusInternalServerError, map[string]any{
+		"error": err.Error(),
+	})
 }

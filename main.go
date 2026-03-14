@@ -47,7 +47,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.Load(*cfgPath)
+	cfg, err := config.Load(*cfgPath, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
@@ -126,7 +126,7 @@ func main() {
 	}
 
 	dirkSigner := dirksigner.NewDirkSigner(
-		cfg.GetGenesisForkVersion(),
+		cfg.GenesisForkVersion(),
 		dirkEndpoints,
 		cfg.Dirk.Wallet,
 		rootCA,
@@ -141,7 +141,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	service, err := service.NewService(dirkSigner, listener)
+	service, err := service.NewService(dirkSigner)
 	if err != nil {
 		log.Error("failed to create service", "error", err)
 		os.Exit(1)

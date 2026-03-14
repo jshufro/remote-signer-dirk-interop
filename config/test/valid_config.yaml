@@ -1,0 +1,14 @@
+log_level: "debug"
+log_format: "json"
+listen_address: "0.0.0.0"
+listen_port: 9090
+network: "mainnet"
+dirk:
+  timeout: 4s
+  endpoints:
+    - "dirk.example.com:9091"
+    - "dirk-two.example.com:9091"
+  wallet: "wallet-name"
+ssl:
+  cert: "/path/to/server.crt"
+  privkey: "/path/to/server.key"
