@@ -14,7 +14,7 @@ func TestCalculateDomain(t *testing.T) {
 	dirk := DirkSigner{
 		log: slogt.New(t),
 	}
-	domain, err := dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", &api.Fork{
+	domain, err := dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
 	})
@@ -31,14 +31,14 @@ func TestCalculateDomain(t *testing.T) {
 	}
 
 	// Invalid genesis validator root should produce an error
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0xgg", &api.Fork{
+	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0xgg", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
 	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x12", &api.Fork{
+	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x12", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
 	})
@@ -47,7 +47,7 @@ func TestCalculateDomain(t *testing.T) {
 	}
 
 	// Invalid current version should produce an error
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", &api.Fork{
+	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0x1234567890",
 		PreviousVersion: "0x00000000",
 	})
@@ -57,7 +57,7 @@ func TestCalculateDomain(t *testing.T) {
 	if !strings.Contains(err.Error(), "fork version is not 4 bytes") {
 		t.Fatalf("error is not correct: %v", err)
 	}
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", &api.Fork{
+	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0xgg",
 		PreviousVersion: "0x00000000",
 	})

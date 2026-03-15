@@ -137,6 +137,15 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 		Signature: "0x" + hex.EncodeToString(signature[:]),
 	}
 
+	// If the request is for a text/plain response, write the signature directly
+	if r.Header.Get("Accept") == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(response.Signature))
+		if err != nil {
+			s.log.Error("failed to write signature", "error", err)
+		}
+	}
 	s.writeJSON(w, http.StatusOK, response)
 }
 

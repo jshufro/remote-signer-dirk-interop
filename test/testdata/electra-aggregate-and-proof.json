@@ -2,9 +2,9 @@
     "type": "AGGREGATE_AND_PROOF_V2",
     "fork_info": {
         "fork": {
-            "previous_version": "0x01000000",
-            "current_version": "0x02000000",
-            "epoch": "100"
+            "previous_version": "0x04000000",
+            "current_version": "0x05000000",
+            "epoch": "364032"
         },
         "genesis_validators_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa"
     },
@@ -16,7 +16,7 @@
             "aggregate": {
                 "aggregation_bits": "0xFFFF",
                 "data": {
-                    "slot": "100",
+                    "slot": "11650024",
                     "index": "100",
                     "beacon_block_root": "0x100814c335d0ced5014cfa9d2e375e6d9b4e197381f8ce8af0473200fdc917fd",
                     "source": {

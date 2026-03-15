@@ -11,7 +11,7 @@
     "beacon_block": {
         "version": "PHASE0",
         "block": {
-            "slot": "100",
+            "slot": "3200",
             "proposer_index": "42",
             "parent_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa",
             "state_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa",

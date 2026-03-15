@@ -4,14 +4,14 @@
         "fork": {
             "previous_version": "0x01000000",
             "current_version": "0x02000000",
-            "epoch": "100"
+            "epoch": "144896"
         },
         "genesis_validators_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa"
     },
     "beacon_block": {
         "version": "ALTAIR",
         "block": {
-            "slot": "101",
+            "slot": "4635672",
             "proposer_index": "42",
             "parent_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa",
             "state_root": "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa",

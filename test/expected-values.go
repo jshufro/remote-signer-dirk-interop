@@ -43,6 +43,9 @@ var TestTimestamp time.Time
 var TestRoot1Str = "0x9281f35130db9307986fb7c4fe38ca5554f725982f9ccde6a5b12d77b001bdfa"
 var TestRoot1 = [32]byte{}
 
+var MainnetGenesisValidatorsRootStr = "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"
+var MainnetGenesisValidatorsRoot = [32]byte{}
+
 var TestBitVector128Str = "0x7eb8ced4cdc41f5d613bc2d084ed33b9"
 var TestBitVector128 = bitfield.Bitvector128{}
 
@@ -53,6 +56,7 @@ var TestProof1Str = "0xab372435c0a4725fd394815a9a24849c9c25af6b4d9b6d5c43dffc9cf
 var TestProof1 = [96]byte{}
 
 var NotFoundPubkeyStr = "0x222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
+var NotFoundPubkey = [48]byte{}
 
 //go:embed testdata/phase0-beacon-block.json
 var phase0BeaconBlock string
@@ -87,6 +91,11 @@ func init() {
 		panic(err)
 	}
 	copy(InteropTestAccount[:], interopTestAccount)
+	notFoundPubkey, err := hex.DecodeString(strings.TrimPrefix(NotFoundPubkeyStr, "0x"))
+	if err != nil {
+		panic(err)
+	}
+	copy(NotFoundPubkey[:], notFoundPubkey)
 	testFeeRecipient, err := hex.DecodeString(strings.TrimPrefix(TestFeeRecipientStr, "0x"))
 	if err != nil {
 		panic(err)
@@ -98,6 +107,11 @@ func init() {
 		panic(err)
 	}
 	copy(TestRoot1[:], testRoot1)
+	mainnetGenesisValidatorsRoot, err := hex.DecodeString(strings.TrimPrefix(MainnetGenesisValidatorsRootStr, "0x"))
+	if err != nil {
+		panic(err)
+	}
+	copy(MainnetGenesisValidatorsRoot[:], mainnetGenesisValidatorsRoot)
 	testBitVector128, err := hex.DecodeString(strings.TrimPrefix(TestBitVector128Str, "0x"))
 	if err != nil {
 		panic(err)
@@ -123,16 +137,18 @@ type SigningTestCase struct {
 	ExpectedHttpStatus int
 }
 
+// fork uses mainnet Capella fork and mainnet genesis validators root so that
+// domain computation matches web3signer (mainnet) for signables that use fork_info.
 var fork = struct {
 	Fork                  api.Fork `json:"fork"`
 	GenesisValidatorsRoot string   `json:"genesis_validators_root"`
 }{
 	Fork: api.Fork{
-		CurrentVersion:  "0x03000000",
-		PreviousVersion: "0x02000000",
-		Epoch:           "555333",
+		CurrentVersion:  "0x03000000", // Capella
+		PreviousVersion: "0x02000000", // Bellatrix
+		Epoch:           "194048",     // mainnet Capella fork epoch
 	},
-	GenesisValidatorsRoot: TestRoot1Str,
+	GenesisValidatorsRoot: MainnetGenesisValidatorsRootStr,
 }
 
 func validatorRegistrationSigning(pubkey phase0.BLSPubKey) *api.ValidatorRegistrationSigning {
@@ -153,7 +169,7 @@ func syncCommitteeContributionAndProofSigning() *api.SyncCommitteeContributionAn
 		ContributionAndProof: api.ContributionAndProof{
 			AggregatorIndex: 100,
 			Contribution: &altair.SyncCommitteeContribution{
-				Slot:              1000,
+				Slot:              6209536,
 				BeaconBlockRoot:   TestRoot1,
 				SubcommitteeIndex: 10,
 				AggregationBits:   TestBitVector128,
@@ -169,7 +185,7 @@ func syncCommitteeSelectionProofSigning() *api.SyncCommitteeSelectionProofSignin
 	return &api.SyncCommitteeSelectionProofSigning{
 		Type: api.SYNCCOMMITTEESELECTIONPROOF,
 		SyncAggregatorSelectionData: api.SyncAggregatorSelectionData{
-			Slot:              1000,
+			Slot:              6209536,
 			SubcommitteeIndex: 10,
 		},
 		ForkInfo: fork,
@@ -180,7 +196,7 @@ func syncCommitteeMessageSigning() *api.SyncCommitteeMessageSigning {
 	return &api.SyncCommitteeMessageSigning{
 		Type: api.SYNCCOMMITTEEMESSAGE,
 		SyncCommitteeMessage: api.SyncCommitteeMessage{
-			Slot:            1000,
+			Slot:            6209536,
 			BeaconBlockRoot: TestRoot1,
 			ValidatorIndex:  100,
 			Signature:       TestSignature1,
@@ -190,21 +206,23 @@ func syncCommitteeMessageSigning() *api.SyncCommitteeMessageSigning {
 }
 
 func voluntaryExitSigning() *api.VoluntaryExitSigning {
-	return &api.VoluntaryExitSigning{
+	out := &api.VoluntaryExitSigning{
 		Type: api.VOLUNTARYEXIT,
 		VoluntaryExit: api.VoluntaryExit{
-			Epoch:          1000,
+			Epoch:          194048, // mainnet Capella range so fork version matches
 			ValidatorIndex: 100,
 		},
 		ForkInfo: fork,
 	}
+	out.ForkInfo.GenesisValidatorsRoot = MainnetGenesisValidatorsRootStr
+	return out
 }
 
 func randaoRevealSigning() *api.RandaoRevealSigning {
 	return &api.RandaoRevealSigning{
 		Type: api.RANDAOREVEAL,
 		RandaoReveal: api.RandaoReveal{
-			Epoch: "1000",
+			Epoch: "194048", // mainnet Capella range so fork version matches
 		},
 		ForkInfo: fork,
 	}
@@ -253,7 +271,7 @@ func aggregationSlotSigning() *api.AggregationSlotSigning {
 		AggregationSlot: struct {
 			Slot string `json:"slot,omitempty"`
 		}{
-			Slot: "1000",
+			Slot: "6209536", // mainnet Capella range (epoch 194048) so fork version matches
 		},
 		ForkInfo: fork,
 	}
@@ -265,7 +283,7 @@ func InteropSigningTestCases() []SigningTestCase {
 	return []SigningTestCase{
 		{
 			Pubkey:             NotFoundPubkeyStr,
-			SignableMsg:        &api.ValidatorRegistrationSigning{},
+			SignableMsg:        validatorRegistrationSigning(NotFoundPubkey),
 			ExpectedHttpStatus: http.StatusNotFound,
 		},
 		{
@@ -277,31 +295,31 @@ func InteropSigningTestCases() []SigningTestCase {
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        syncCommitteeContributionAndProofSigning(),
-			ExpectedSignature:  "0x83080f88390cac2e49da4897e17c52c59e761b2d63ce24cf34f24671a5fcd3ee5416dc1298e4aade7abffa453229263b19cbff8fc2b66dbba23b3ffdc5bab3b5615b75dd682c8e628c6f7897c7823daf35eaf45944947f71e35bab3cc4a6eaa6",
+			ExpectedSignature:  "0xb9757d0c6603caa1cecee5989b512b7b041ea4db2271db0fabf9a8ea66854770042c9a856545bb3dd0209a52ded71b40010716229873e9fdfa8aaab6687e675b7dfd61be96681c64ee69928c5b30386b5b996f4728e72d04e5e22a7ff9d184f5",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        syncCommitteeSelectionProofSigning(),
-			ExpectedSignature:  "0x891950d5049e83c29bce012a01043642e6a9ae1e44bf7f4b42e453cfdd18959f3a822ced199b257106fed0f24509022817c355cbb165198fdd3baaf805130fa842397be1fbced4e8f3e00e3efc86d92f3fec1969f5d323a2ef97ccd0953292f5",
+			ExpectedSignature:  "0x81147f3d1d7c31e515ae530baf06c119dec25ac1639b36ea955e61c7495f63b8984208a3fc6bcb45595891fcc2643fe00f5331e16e0bf40f3d9c982ef9234f38f25b403f052c68ade44ecf4802f773e67e055514605e87addb7acb3cc3e0465b",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        syncCommitteeMessageSigning(),
-			ExpectedSignature:  "0x94a419a2a09d02074682804b5a5bc5da56cfaabb9f869eacf4bb2b0ad97b830d47100913705eed967a3c390c85c4acf012e1485630fb3844880b574bd52b5b719e240fe04ebe38eefd228b56f47dcbfce3e78d6de9c9d4ed4f314c6c1e0eae1b",
+			ExpectedSignature:  "0x877b83c3cf856d09961bc76f99433777ba089c8cd0e15260122ed69e5a16889301c778c2a35a713ab64b5b376b31656d09167c821b18d35bb6354b8d2c3f5bae4938fff5dab815e41c0efc5c6aed4f9479a114fe554ce3c99dd5f981e5c11f2c",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        voluntaryExitSigning(),
-			ExpectedSignature:  "0xb6d30c6ff0761a4b2cdf7a503bb67cf6c1d54b81829fbf3280e7fa469ceec2df90ecc0886040f6801ef6c9f0576962f30948fd21bad6db021d06458c7f6be4bdc8292692fe3b3982c5161cad06c4989793ec8741aa9615f658d2c717382bfa71",
+			ExpectedSignature:  "0x8b2a6084c9e6df8fdbd21a30e3955de6e7ccc3169091ac6b777b5f5e715d07bd5b04ef9f9369c3b2c99631fac10980d0027c710335069946fe3546bb4f3f8493f8cba601fa2b37e44442c6cce660b9f18e0232fccf50faec61f7bae3f1d90bc4",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        randaoRevealSigning(),
-			ExpectedSignature:  "0xa4437051b853c1b51f383104d090842984c3b22669e99795a61faf8efdd6fab1c76d97063d55d0be609973d9492811a7139ae82fd6a06a098157c6cbb65b196a2b344e7b6a04a84bf6b8f0717b0817cd478cbb2f39ceb66a38fd4c5d29202bee",
+			ExpectedSignature:  "0xa2520fc4f502e00abd0e479982fed20f7996dad57f860705226f33dfd6f962a22ad4efdc9e47394c77b49f0e330c98f702129dcf14fd429ea7d6ae96ff28a94fb00a52c95d44fc0f79349735de7513dc5b67f73554dd7835007269ed2f61d0c2",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
@@ -314,77 +332,77 @@ func InteropSigningTestCases() []SigningTestCase {
 			// phase0 beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            phase0BeaconBlock,
-			ExpectedSignature:  "0x87a4926dd0f0af6a9c52c6ac3246b8d511567010765b3fabf8cfde9676b9dd74cb6ff2b3f6db210afdb4120de41330b20781d29497c36e28d926a9d82515cdf1b7a0d789d93d7c3b73f523f00d8cfcf5e84ac570ae9b35d4bd362a44b902c770",
+			ExpectedSignature:  "0xb979fac150bf45f6281aaeab1b66b494142553293c5092d500be7ae719d3c0953f32f63357581178a249e4b71c5c2320083ee0a626944dc3ffb00647d8eb3cc7fffe1f06e7088e5cf0b109b37f1e3b6a9a687fc7ae1f240f116df0e96e58899e",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// altair beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            altairBeaconBlock,
-			ExpectedSignature:  "0x87368a123e543d0d2ee4882dea2cd5ffb1520861790fa540b05beb087c3f6e71c3f64862dfdf9454918d41e2ae164c160220b73cfe6709e1d6b926c0d24530a58284b6ae4ed420cbc7d1c126721c4180b50f9210ff99f17a142869b178e5e14d",
+			ExpectedSignature:  "0x935c179624592b6d979b72729e27875c00b6a5c11ed6ab36ea2d14b5824ddcfe7882e5fb963ad64ccc4e44b314186e16013101aa658b83e095d509e570167a3246f0ceca1a52e8fe73f70cbcbad47f2ab9978da38036a2ed56cdfd112351363e",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// bellatrix beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            bellatrixBeaconBlock,
-			ExpectedSignature:  "0x87641c42e725ee35289649bf2737664e1e8e8c38f881dcc1bc5299d28f1fafd981ebe10631d482f1d51dc88bf2dcb60a04b99587ff80b4bda1c50019cba4b9b2ccbd63778a502780ccaaa8b76688a5d31b19c5f02deaf95e3e46e3b36b0d231c",
+			ExpectedSignature:  "0xa9fefea4805372183eb447765e44be3b23fe84d996a6db0fbcc737026085792cf38f50012d8109a81547bfb4d5e7ae8c0fb36f6dfa80d4ed8aa23c5cc7c6bb982d42a6f91933de9f806a6c8547fe8e6a2097d3a2802add75037015aa71abe5f9",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// capella beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            capellaBeaconBlock,
-			ExpectedSignature:  "0x8e6724fcae08afcd2b21735203f58f8a4b47e241cab4f972ab5c3baa6c4caaab91d5f3e28eaaed248e0e0d775d9c9de516739a9f84362d9b846bd9636e54f3f5a5d2151caf2a87cb786c3819d333f7c0fc215168d93e1695f69df2d4f3450f5b",
+			ExpectedSignature:  "0x8c5a55ffcf3b74d4e324fb0796aef6ce1c76117d553a9d801625be9d5e04b89228856346224de3202df99506e01a888807259c809d9a12b5538a3a2d88cd5094e84c4290d90f9de3f5942b07be806d888a1f092a5041bb7ace3a556f02b6f48d",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// deneb beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            denebBeaconBlock,
-			ExpectedSignature:  "0xa5822c20ecc4fd73ccb1f2e2becfa0c0e47f2e1bd1fe9b206889c966a0e49e9cebb376e1142bd9b64c23253cd09fcda01117cd5cbea6ba844f8aac8190b5963c79ea5d4edd054db418db18c1569fa6943c914b2473a05f07af3f80e81eb9c75f",
+			ExpectedSignature:  "0x85f364382ea6557b93740087b0675601f243a89f12425b260c8f7fb44cbcd1ea7617e7ae038fa3ed4e70c5429a03e10b042e67d80d48a92a494ab6d6a2c2a615813f290383d517b977342210df1cdd74bbdcd9f196361246d539b65e85123cc1",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// electra beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            electraBeaconBlock,
-			ExpectedSignature:  "0xb1a3df65bb9553348a686ac74048eee7e7eaee7e285149c8a449f416fcb8dcae668c495009f86552a9eba49e24afde2f087c80a2ccd030fd3929c68646f49f041541c0ffda32d3dbee16f478bd1cf938ee3cdb25474c2b5635ee6793e4ba77d6",
+			ExpectedSignature:  "0xa2e52c083264d78fa3f44eccb8afcbf04e4faa4988b3c6b79a601a37325fa4dd59162219b647e5c75a4bd4ab60c9194800fe118d865526a26cbfa8dbdf2d75b67422fafc8eaccdd0d133d82ef1f890139896425559df3067f29cf823db6d6521",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// fulu beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            fuluBeaconBlock,
-			ExpectedSignature:  "0xb2409cb8abd33100df79cf2bc43902a35e30edea76f2a0b839ad3ebc6d9d21372ce644d6d76ada4c2efb825a91780d9813c2d19ddbd296b44fd52f441eb7488e8b222c0ee6ff9608793dc323b04bb6beb3fcdf21830b80f7b1e10518354f539d",
+			ExpectedSignature:  "0xa71cd31506ec597e896e6f6205b56cc39f73626a72473411d58cdc326e33e5ef979c42f37427b686e513c4adafce4f9018310e9adcb56fe261f1f873caf8740f86abaf9bc248e867d4f1469aa7f537aaecced2eda9317ff486c3b1d851a1ff76",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// attestation
 			Pubkey:             pubkeyStr,
 			SignableMsg:        attestationSigning(),
-			ExpectedSignature:  "0x85543afe60d6b8623edc5466ef3a40bcd8a3027ef54369aa69c6222b78cf6125585c91037f85236b679b066980a3b2ca13ba2038ab24787139f89f3726f603b027139b28c2720463808096a679d8849c6f27c5b36aa15874daa87fcf6d77de25",
+			ExpectedSignature:  "0x8c82eb0da26fedec4af953bc45b946221efa7136e524a8dd19c897a4afc31c9b55850877e4b40b2ac2f9f57351091464041fe10f7a035aa139da23f3ce6c6199fdee500a87cc94b8e9573e1ef5c39bef8b08354c05ac2dcfeb5c9156a564e3a2",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// aggregate and proof phase0
 			Pubkey:             pubkeyStr,
 			RawBody:            phase0AggregateAndProof,
-			ExpectedSignature:  "0x8c8f28029e20eed22aaf4bfa2963af48373f0ce93bddf8a5dba7174054be780aaba5c8ff6530d58840618a59b5e6c24307206dbef6c70885878fb33c60fbaef1e3150f173307810040f158cd7e2d09266eec35c999006a226ab202b6d509e54c",
+			ExpectedSignature:  "0x8134241fda2ff80eb134ea045ee1870f3b5530ac4535b11e5938a0ba7ee83e40194222c656c55c44903dfe9d4cf6f26a09107875d3926be025a0e7681ad39eabff57bbb9c8332a29aff70bdb0b666f2d13b9be95be75ff649c7ba5fa583af401",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// aggregate and proof electra
 			Pubkey:             pubkeyStr,
 			RawBody:            electraAggregateAndProof,
-			ExpectedSignature:  "0x90b96e7e07b815a7592c7958dd780296c11f3854a94867bf3c1ea0eec7c518e68443ceb643a63f08d419905c446de438017983727097337b271205641334664b066705eb9a4992c8bac6b59ecd07222ad48b1a4a0539ec6a6205bf0295dade2a",
+			ExpectedSignature:  "0xab0c958b1f660008bf6983361318b59e21f7f45ae90a0f4ee9365721af9bd11badf8c6e61cb15c70c1a4efb3f0202d1100eb45c400b243bde7e1921dac1d3dad39e8525ae93be258ce2ae363782b6333be763e28b3fe1b03ad2afdf5e525d226",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// aggregation slot sligning
 			Pubkey:             pubkeyStr,
 			SignableMsg:        aggregationSlotSigning(),
-			ExpectedSignature:  "0xb889f33d9a7bef1b93d950bf60e6f6a7582afa9787c396b329cdd36c1c0d31d91d14a1ebca7839429342a63515b557f20946df9bc32cc07353001a606bf388f6eb4e1702b69b938f7fa6bfe24584f5057ad2505cf03c1014bd09ccabab67c304",
+			ExpectedSignature:  "0x812659f12a1b664e286768e147595f69272a4777ca1cd7c8799fe944b763621ec5807af899a01b3b6b34d10f05c5fe581228f7d1121b1f89581e7afc2044c35e0d444d2913ce3c81d46a8075d3c85122ee61c506f271655425a7e7a04a94b7fd",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 	}
