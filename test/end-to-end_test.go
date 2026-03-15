@@ -23,6 +23,8 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/service"
 	tlstest "github.com/jshufro/remote-signer-dirk-interop/pkg/tls/test"
 	"github.com/jshufro/remote-signer-dirk-interop/test/client"
+	"github.com/jshufro/remote-signer-dirk-interop/test/dirkdaemon"
+	"github.com/jshufro/remote-signer-dirk-interop/test/dirkdaemon/proc/distributedwallet"
 	"github.com/neilotoole/slogt"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
 )
@@ -71,7 +73,7 @@ func startDaemons(t *testing.T) []*e2wd.Endpoint {
 	if err != nil {
 		t.Fatalf("Could not create temp dir for logs and wallets: %v", err)
 	}
-	peerMap, logCaptureMap, err := StartDaemons(ctx, tmpdir)
+	peerMap, logCaptureMap, err := dirkdaemon.StartDaemons(ctx, tmpdir)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -99,12 +101,12 @@ func startDaemons(t *testing.T) []*e2wd.Endpoint {
 	return endpoints
 }
 
-func newDirkSigner(t *testing.T, endpoints []*e2wd.Endpoint, logger *slog.Logger) (*dirksigner.DirkSigner, error) {
+func newDirkSigner(t *testing.T, walletName string, endpoints []*e2wd.Endpoint, logger *slog.Logger) (*dirksigner.DirkSigner, error) {
 	ctx := t.Context()
 	dirkSigner := dirksigner.NewDirkSigner(
 		[]byte{0x00, 0x00, 0x00, 0x00},
 		endpoints,
-		"Wallet 1",
+		walletName,
 		tlstest.CAPool(),
 		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
 		logger,
@@ -118,10 +120,8 @@ func newDirkSigner(t *testing.T, endpoints []*e2wd.Endpoint, logger *slog.Logger
 	return dirkSigner, nil
 }
 
-func startService(t *testing.T, logger *slog.Logger) *client.ClientWithResponses {
-	// Create the dirk daemons
-	endpoints := startDaemons(t)
-	dirkSigner, err := newDirkSigner(t, endpoints, logger)
+func startService(t *testing.T, walletName string, endpoints []*e2wd.Endpoint, logger *slog.Logger) *client.ClientWithResponses {
+	dirkSigner, err := newDirkSigner(t, walletName, endpoints, logger)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -142,8 +142,10 @@ func startService(t *testing.T, logger *slog.Logger) *client.ClientWithResponses
 }
 
 func TestDirkInteropSignerOperations(t *testing.T) {
+	// Create the dirk daemons
+	endpoints := startDaemons(t)
 	logger := slogt.New(t, slogt.Text())
-	c := startService(t, logger)
+	c := startService(t, "Wallet 1", endpoints, logger)
 
 	// Get the public keys
 	ctx := t.Context()
@@ -214,5 +216,70 @@ func TestDirkInteropSignerOperations(t *testing.T) {
 			}
 		}
 	}
+}
 
+func TestDirkDistributedSignerOperations(t *testing.T) {
+	// Create the dirk daemons
+	endpoints := startDaemons(t)
+	logger := slogt.New(t, slogt.Text())
+	c := startService(t, "Wallet 3", endpoints, logger)
+
+	// Get the public keys
+	ctx := t.Context()
+	publicKeysResp, err := c.PUBLICKEYLISTWithResponse(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if publicKeysResp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status code %d, got %d", http.StatusOK, publicKeysResp.StatusCode())
+	}
+	if publicKeysResp.JSON200 == nil {
+		t.Fatalf("expected public keys, got none")
+	}
+	publicKeys := *publicKeysResp.JSON200
+	if len(publicKeys) == 0 {
+		t.Fatalf("expected public keys, got none")
+	}
+	pubkey := publicKeys[0]
+	if pubkey != distributedwallet.DistributedAccountPubkeyStr {
+		t.Fatalf("expected public key %s, got %s", InteropTestAccountStr, pubkey)
+	}
+
+	// Test signing
+	for _, testCase := range DistributedSigningTestCases() {
+		buffer := bytes.NewBuffer(nil)
+		if testCase.RawBody != "" {
+			buffer.WriteString(testCase.RawBody)
+		} else {
+			marshaller := json.NewEncoder(buffer)
+			err := marshaller.Encode(testCase.SignableMsg)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+		}
+		identifier := testCase.Pubkey
+		if testing.Verbose() {
+			t.Logf("signing request: %s", buffer.String())
+		}
+		resp, err := c.SIGNWithBodyWithResponse(
+			ctx,
+			identifier,
+			"application/json",
+			buffer,
+		)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if resp.StatusCode() != testCase.ExpectedHttpStatus {
+			t.Fatalf("expected status code %d, got %d", testCase.ExpectedHttpStatus, resp.StatusCode())
+		}
+		if testCase.ExpectedHttpStatus == http.StatusOK {
+			if resp.JSON200 == nil {
+				t.Fatalf("expected signature, got none")
+			}
+			if !strings.EqualFold(resp.JSON200.Signature, testCase.ExpectedSignature) {
+				t.Fatalf("expected signature %v, got %v", testCase.ExpectedSignature, resp.JSON200.Signature)
+			}
+		}
+	}
 }

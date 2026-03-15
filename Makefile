@@ -21,11 +21,11 @@ DOCKER_TEST_CMD = docker run --rm \
 	-e GOCACHE=/home/user/.cache/go-build \
 	-e GOMODCACHE=/home/user/.go-mod-cache \
 	-w /app \
-	--add-host=signer-test01:127.0.0.1 \
-	--add-host=signer-test02:127.0.0.1 \
-	--add-host=signer-test03:127.0.0.1 \
-	--add-host=signer-test04:127.0.0.1 \
-	--add-host=signer-test05:127.0.0.1 \
+	--add-host=signer-test01:0.0.0.0 \
+	--add-host=signer-test02:0.0.0.0 \
+	--add-host=signer-test03:0.0.0.0 \
+	--add-host=signer-test04:0.0.0.0 \
+	--add-host=signer-test05:0.0.0.0 \
 	remote-signer-dirk-interop-dependencies go test $(_GO_TEST_FLAGS) ./...
 
 .PHONY: build
