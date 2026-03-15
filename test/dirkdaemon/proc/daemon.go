@@ -184,7 +184,10 @@ func New(ctx context.Context, path string, id uint64, port uint32, peersMap map[
 	}
 	// Import the test distributed wallet
 	if daccImporter, ok := wallet3.(e2wtypes.WalletDistributedAccountImporter); ok {
-		daccImporter.(e2wtypes.WalletLocker).Unlock(ctx, []byte{})
+		err := daccImporter.(e2wtypes.WalletLocker).Unlock(ctx, []byte{})
+		if err != nil {
+			return nil, "", errors.Wrap(err, "failed to unlock wallet 3")
+		}
 		testWallet, err := distributedwallet.WalletSigner(ctx, int(id))
 		if err != nil {
 			return nil, "", errors.Wrap(err, "failed to load test wallet")

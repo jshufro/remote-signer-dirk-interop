@@ -62,7 +62,10 @@ var mux = sync.Mutex{}
 func WalletSigner(ctx context.Context, id int) (e2wt.Wallet, error) {
 	mux.Lock()
 	defer mux.Unlock()
-	e2w.UseStore(scratch.New())
+	err := e2w.UseStore(scratch.New())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to use store")
+	}
 	w, err := e2w.ImportWallet(wallets[id], []byte(passphrase))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to import wallet")
