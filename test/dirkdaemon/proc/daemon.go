@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	standardrules "github.com/attestantio/dirk/rules/standard"
 	standardaccountmanager "github.com/attestantio/dirk/services/accountmanager/standard"
@@ -117,11 +118,15 @@ var Wallet2Keys = [][]byte{
 // Returns the log capture for the daemon, along with the filesystem path for the wallets.
 //
 //nolint:maintidx
+var initBLS = sync.OnceFunc(func() {
+	if err := e2types.InitBLS(); err != nil {
+		panic(err)
+	}
+})
+
 func New(ctx context.Context, path string, id uint64, port uint32, peersMap map[uint64]string) (*logger.LogCapture, string, error) {
 	capture := logger.NewLogCapture()
-	if err := e2types.InitBLS(); err != nil {
-		return nil, "", errors.Wrap(err, "failed to initialise BLS")
-	}
+	initBLS()
 
 	// Start off creating the wallet and accounts if required.
 	if path == "" {

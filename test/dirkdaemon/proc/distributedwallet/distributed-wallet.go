@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"strings"
+	"sync"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
@@ -56,7 +57,11 @@ func init() {
 	}
 }
 
+var mux = sync.Mutex{}
+
 func WalletSigner(ctx context.Context, id int) (e2wt.Wallet, error) {
+	mux.Lock()
+	defer mux.Unlock()
 	e2w.UseStore(scratch.New())
 	w, err := e2w.ImportWallet(wallets[id], []byte(passphrase))
 	if err != nil {

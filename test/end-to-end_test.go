@@ -67,13 +67,13 @@ func emitDirkLogs(t *testing.T, tmpdir string, logCaptureMap map[int]*logger.Log
 	}
 }
 
-func startDaemons(t *testing.T) []*e2wd.Endpoint {
+func startDaemons(t *testing.T, ids ...dirkdaemon.ID) []*e2wd.Endpoint {
 	ctx := t.Context()
 	tmpdir, err := os.MkdirTemp("", t.Name())
 	if err != nil {
 		t.Fatalf("Could not create temp dir for logs and wallets: %v", err)
 	}
-	peerMap, logCaptureMap, err := dirkdaemon.StartDaemons(ctx, tmpdir)
+	peerMap, logCaptureMap, err := dirkdaemon.StartDaemons(ctx, tmpdir, ids...)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -143,7 +143,7 @@ func startService(t *testing.T, walletName string, endpoints []*e2wd.Endpoint, l
 
 func TestDirkInteropSignerOperations(t *testing.T) {
 	// Create the dirk daemons
-	endpoints := startDaemons(t)
+	endpoints := startDaemons(t, dirkdaemon.ID1)
 	logger := slogt.New(t, slogt.Text())
 	c := startService(t, "Wallet 1", endpoints, logger)
 
