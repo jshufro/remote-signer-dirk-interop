@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -284,7 +286,7 @@ func TestWriteJSONNil(t *testing.T) {
 	svc.writeJSON(httptest.NewRecorder(), http.StatusOK, nil)
 }
 
-func TestWRiteJSONNotSerializable(t *testing.T) {
+func TestWriteJSONNotSerializable(t *testing.T) {
 	fs := &fakeSigner{}
 	svc, err := NewService(fs)
 	if err != nil {
@@ -318,5 +320,72 @@ func TestWriteJSONStdError(t *testing.T) {
 	res = recorder.Result()
 	if res.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("expected 500 Internal Server Error, got %d", res.StatusCode)
+	}
+}
+
+func TestTestTextPlainResponse(t *testing.T) {
+	fs := &fakeSigner{}
+	svc, err := NewService(fs)
+	if err != nil {
+		t.Fatalf("NewService error: %v", err)
+	}
+	svc.SetTimeout(1 * time.Second)
+
+	pubkey := [48]byte{}
+	for i := range pubkey {
+		pubkey[i] = byte(i)
+	}
+	identifier := "0x" + hex.EncodeToString(pubkey[:])
+
+	body := map[string]any{
+		"type": "AGGREGATION_SLOT",
+		"aggregation_slot": map[string]any{
+			"slot": "123",
+		},
+		"fork_info": map[string]any{
+			"fork": map[string]any{
+				"previous_version": "0x00000000",
+				"current_version":  "0x00000000",
+				"epoch":            "0",
+			},
+			"genesis_validators_root": "0x" + hex.EncodeToString(make([]byte, 32)),
+		},
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eth2/sign/"+identifier, bytes.NewReader(raw))
+	req.Header.Set("Accept", "text/plain")
+	w := httptest.NewRecorder()
+
+	svc.SIGN(w, req, identifier)
+	res := w.Result()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", res.StatusCode)
+	}
+
+	// Check Content-Type
+	if res.Header.Get("Content-Type") != "text/plain" {
+		t.Fatalf("expected text/plain content type, got %s", res.Header.Get("Content-Type"))
+	}
+
+	// response should be a signature
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	signature := string(respBody)
+	if signature == "" {
+		t.Fatalf("expected signature, got empty string")
+	}
+	// Parse as hex
+	signatureBytes, err := hex.DecodeString(strings.TrimPrefix(signature, "0x"))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(signatureBytes) != 96 {
+		t.Fatalf("expected 96 byte signature, got %d", len(signatureBytes))
 	}
 }

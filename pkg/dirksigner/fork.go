@@ -30,12 +30,12 @@ func (d *DirkSigner) calculateDomain(
 	if epoch < forkEpoch {
 		forkVersion, err = decodeHex(fork.PreviousVersion)
 		if err != nil {
-			return nil, errors.BadRequest("failed to decode fork version: %w", err)
+			return nil, errors.BadRequest("failed to decode previous fork version: %w", err)
 		}
 	} else {
 		forkVersion, err = decodeHex(fork.CurrentVersion)
 		if err != nil {
-			return nil, errors.BadRequest("failed to decode fork version: %w", err)
+			return nil, errors.BadRequest("failed to decode current fork version: %w", err)
 		}
 	}
 	if len(forkVersion) != 4 {

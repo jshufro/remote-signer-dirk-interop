@@ -82,4 +82,17 @@ func TestCalculateDomain(t *testing.T) {
 	if !strings.Contains(err.Error(), "failed to parse fork epoch") {
 		t.Fatalf("error is not correct: %v", err)
 	}
+
+	// Invalid previous version should produce an error
+	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 10, &api.Fork{
+		CurrentVersion:  "0x00000000",
+		PreviousVersion: "0xgg",
+		Epoch:           "100",
+	})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to decode previous fork version") {
+		t.Fatalf("error is not correct: %v", err)
+	}
 }

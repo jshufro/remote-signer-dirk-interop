@@ -145,6 +145,7 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 		if err != nil {
 			s.log.Error("failed to write signature", "error", err)
 		}
+		return
 	}
 	s.writeJSON(w, http.StatusOK, response)
 }
