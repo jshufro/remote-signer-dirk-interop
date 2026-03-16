@@ -1,18 +1,16 @@
 log_level: "debug"
 log_format: "json"
-
-# Example config. Use -config path/to/file or REMOTE_SIGNER_* env vars.
 listen_address: "0.0.0.0"
 listen_port: 9090
-# Dirk endpoints: "host:port" or "domain:port" (no scheme).
 dirk:
   timeout: 4s
+  # Dirk endpoints: "host:port" or "domain:port" (no scheme).
   endpoints:
     - "dirk.example.com:9091"
     - "dirk-two.example.com:9091"
   wallet: "wallet-name"
 
-# TLS for serving and/or connecting to Dirk
+# TLS for authing to Dirk
 ssl:
     refresh_threshold: 24h
     refresh_retry: 10m
@@ -25,4 +23,4 @@ root_ca: "/path/to/ca.crt"
 # Alternatively, set network to a 0x-prefixed hex string representing the genesis fork version
 # of your custom network (e.g. 0x10000910 would be hoodi)
 # Default is mainnet
-network: "hoodi"
+network: "mainnet"
