@@ -5,11 +5,13 @@ GOENV_GOMODCACHE = $(shell go env GOMODCACHE)
 
 PKG = $(subst /,\/,$(shell go list))
 
+TEST_SKIP = -test.skip=TestParitySigning
+
 VERBOSE ?= false
 ifeq ($(VERBOSE), true)
-	_GO_TEST_FLAGS = $(GO_TEST_FLAGS) -test.v
+	_GO_TEST_FLAGS = $(GO_TEST_FLAGS) -test.v $(TEST_SKIP)
 else
-	_GO_TEST_FLAGS = $(GO_TEST_FLAGS)
+	_GO_TEST_FLAGS = $(GO_TEST_FLAGS) $(TEST_SKIP)
 endif
 
 DOCKER_TEST_CMD = docker run --rm \

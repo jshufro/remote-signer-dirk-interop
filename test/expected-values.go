@@ -426,31 +426,31 @@ func DistributedSigningTestCases() []SigningTestCase {
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        syncCommitteeContributionAndProofSigning(),
-			ExpectedSignature:  "0x858344f4ae00aec1b692f1d0da4c16ca31f154ba61aa91f0c1a1a65e95d18ecc525a943a6b1305e610bb330c849ea43d02c983c603eb8540220fbd8bf56a76097a12ad71e0a45ea2c7aedb2d6d9333ca44f3030b7b7e0bca44691b7ab717c31a",
+			ExpectedSignature:  "0x8cf76a418d7055dcf8f6f09cfff89874fe902cc892ef5830a15eb950caaaf90cf840847b8390f0ff353eb628b037a4f60915bde4e9ef6074d63c02eea3623dd3618007d2d08ded7cccfcaa47c2bba9f918c3a532cf576331fa45fba4f6505cbc",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        syncCommitteeSelectionProofSigning(),
-			ExpectedSignature:  "0x99fecf337d970b790ba6cbcb6ac12685a081c70940ee98d9e58a276a1c7a27130942e2587eee1bf28cee06b2782422e207bcd7c26c68581f91c8b7480296d0b4a86e4a6a31b63b809ea9cdcc6386d5acb0bb98bb6da1747911b1ccd9d53bb74f",
+			ExpectedSignature:  "0xac91522e2c8c03b19ddad1e2527a252432e8a0fcb6f89417d88130bf181b7b5dc8f5a5d1cfd6af9cdaaf0c2d5c1f77ef0b4db1f33ab9c7e8629f8d4914462f157216519f3094497bd1757a20463946fac669f9b2abe3d88ee2c3cc41d2ff2cd3",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        syncCommitteeMessageSigning(),
-			ExpectedSignature:  "0x8957ad63251fe542e02d228a588b7ccfdeff7be7b933f1b191ff039baf10a99247984a31c459edd04d2f821e192f538c136fc579841694f32006339d543fc292a820ce8d4de687161d84ee9d32c589b059820972bf91b34219e7f7e63e6dcc83",
+			ExpectedSignature:  "0x83194fea25b7b8f7a0b171e9b742de995fb548faaeb555eca490d83c0afd00dc72f5b860da1cdc6572cfe0c8aae142170147d45e3b33c92e886093ad577cb417ead78b80238a12ec089755abfc45dfe4e4fdedd4ac198eed9c7fd421c41c04f8",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        voluntaryExitSigning(),
-			ExpectedSignature:  "0x88faac0bfbcf4c0916ad6be44ae820d8d255e334fd296f7348ce78745e66fa5bae41a9e4475e9e7bfc74a2d5d3e7308d145e00b3a24fa602ba5fdbebb36de632594314babea2919dff48ddcb21fa797b7efefd389acd4ccb43483ca4c401eb14",
+			ExpectedSignature:  "0xacf2e0824145978a4d2a2df750e687c4c72545cd3032d6a5b767e503d6155a524e432b83a3eb29598cdb16c776f94f51002cd9c4c3da6708b8ccc520e73a2c63ff8ae6d63d3e52be1c1cc01e7967f6a150c27c103630b96322cc3b44e4a6bf09",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			Pubkey:             pubkeyStr,
 			SignableMsg:        randaoRevealSigning(),
-			ExpectedSignature:  "0x91a352f1689dba1154ba79910568787a135178b83c112cdb0775128f3c020d32202b8deafa1fe67616e1bcbb84a450f707f4207757bb5d6dc523445a4edf3a39d0a223dfefd607c06b5f231dde958b487cf3b203fd5b12c014e0daee062688b3",
+			ExpectedSignature:  "0xac8002757d5a67a07c6dbf38719c6e6d6e6a24f6a7af0f7e2eb3809bd0191ba936e5ed86a17b08d9394aa06b2fb246540ccee61b92cf3e108723a081a2ea60ef61391ef9a7ff91e18def616edfd13910d0f6099b987bf1e8e4a423a0259a41f5",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
@@ -463,77 +463,77 @@ func DistributedSigningTestCases() []SigningTestCase {
 			// phase0 beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            phase0BeaconBlock,
-			ExpectedSignature:  "0xa5072f5035079b11faf86021202ff216cb0c75cb0a9657e133cc4d3fc66707fb6e02590be545af81fdb5672b3b16d9d10eab564961b74e5d54add66ebe7de5eb81093d5f597445fb5c14ef5362549f063f9b0a0abd20fbf07b862e5233e605c2",
+			ExpectedSignature:  "0x868e55433fcbd96ac4f0a97fab33db37d34faf416bac89a875a8670b337437907dd482b8ed7a481055761fcfe4b8c4f408b403d5a2c3ba9067e4b26382c354a8469bbbd0f55cc3146d071f5cfe85c1b68d06ed8899bbc216ecbd09a6e8a8e708",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// altair beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            altairBeaconBlock,
-			ExpectedSignature:  "0x981420fe0087df6ae30dab4ade0269a3c1ca513a5c9e8aa51e5beddc2b90731b5632f56f2403a2596a062ca02cb22c3c067ae818eaac82a8c61c36dbf77cad0f50887bec05bf5a2974107266b0c4263b4ca7d10a27b556758a015f074ac0b530",
+			ExpectedSignature:  "0x82ca261a0f20ab58322be37db1611a1cf2d0c70eec717db12f2464d44d2330f20545c089e1b9a6fe2cacff6ac3bc94670a7721c55a576fcdbef35de50cfa4f085824be096d3b1cdcce30ecf6a495cb5a84a8d70c93b4c3793c54a05f984f5c35",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// bellatrix beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            bellatrixBeaconBlock,
-			ExpectedSignature:  "0x83839c77840daaf9ed70b1c89c46202b94fc8e0826a01003488199e6df7d4345c70cf370426c18921680dd07e7997ecf159d892b14431e677fb0e06c635774a5e34f9c4ee539d2bc3546d963c05cd74a868586229188d60847a98dfba6dd0bc2",
+			ExpectedSignature:  "0xaea74b501ebf70502a7c2f874600be83c0a53d53952378c46d5ce1d7c608583ae75015274a524ef87eeb4906f2d322ab0a5e762c5116735ebd0c4b0d091526f8f2818f20b538b285172aa2e09652b5ec279459ec49aca1d1e60ae0bcb94fe086",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// capella beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            capellaBeaconBlock,
-			ExpectedSignature:  "0x811a3c98a83c799aa011faeef09c2be15014f3d489ef131b6bcbac531c234199c5f8c70d05ed53f2ed7aceb2a659f58a0694ad99eaa6b333f92d29e88de8a8e75b50b348656a90659b26d4e836397c575e9b5964b7b36a55e87d824a853c2284",
+			ExpectedSignature:  "0xa58cf94f0ca7ac0292588170936d99cc4e196667a2336a7c6635df9bc21dcd5fda83f82e3e62f8935831172b52396b33179dcfa0e090329722d88100e7661ff36b9f37f255214fe93ed04edb64fd2052590850d8b8c0c43fe6327fb9c0ed4be2",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// deneb beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            denebBeaconBlock,
-			ExpectedSignature:  "0xad724c0cff44374a7c7e5ad804218e6371be5cb75d33424cfd61b9261988c9459e55ba1a90423efa9065e517a4dfbf11150a6eb6279579b20753a3fa133742ca446e80e13807ff020cef55b8e97b5b6d12bca7f480e1bd5c19c5c702c6248573",
+			ExpectedSignature:  "0xa4e52ae82d9967ad996492868a5c428b57ed570d8ca63e0e1b75932ff12a0218e373f444f2bf7b4ef8af918a29179310003a39e8825f4d474676066dbf28bb51a705b08de0b474e0a9b890f51f34c2a9be15906506c72b4fc3e32988a09db798",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// electra beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            electraBeaconBlock,
-			ExpectedSignature:  "0x9378e76689bcd578ce92f0a6505ec3a5734d7e770434fef1becdf206f1e4a75ad2bb9110c70c8c0fcfe68c07f8200a17126242899b0df5393dbb0d50e12b11ffd87e689e159fe2ed1bfd03d0ecf1c7352eec067e712f950d556eb6ee8236a4d1",
+			ExpectedSignature:  "0xa86fff10554e8c9fd486e40edcf18267070a3610534d2ae520eedc3aadaa532c96996567af264b47d79a80fa794ab0d403df8acf541162e6cc688957382e397b2a969c630dcaaa7359390980efed4f40b194bd7752b1c3c105686139bdae1e7a",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// fulu beacon block
 			Pubkey:             pubkeyStr,
 			RawBody:            fuluBeaconBlock,
-			ExpectedSignature:  "0xa57125b94aeb4020a20fc7d3a1018a1782a4608b5549a761427daacabd2ccc85584377f566e087384560c4b89c4cbe350b809ccae4ee5201ac34c241a9ffcb4c2af5bef37537584b81c22cc3dc3c825e72c83033e0e842f0746b16e4df3550c9",
+			ExpectedSignature:  "0xa800a7442003edda849180b824285c88a40d657658c7db633588b436321c11d762f8c7113f3231e16e8c13d22e4f6c2c05e5a3b3677ff44bd8bbf7dcfa399e2fdc9346df2fcaca1c2bdf70642f2782aca7b078f0aad1ff465585c1afeff4b56a",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// attestation
 			Pubkey:             pubkeyStr,
 			SignableMsg:        attestationSigning(),
-			ExpectedSignature:  "0x8ea44d899dcba6be17174867906f30c114fa43e93d559731357f445f4c735a99ea84cedd6da591c42f04fdf726a6d29c00c04aa8d8f7d7cb4a80acb5d0c6528ef56fc7687d0ec8f83d6a788d3116d20dbe52f952ea3988819c42186de41553df",
+			ExpectedSignature:  "0x88293faf70da73e4059637906e2baa95d279b30ef1fa857d7dd28c66ed6210f4c7862fe97a097d5aadfa459d88ef0d950651c017a28cd9128b3cce907aa73eb2d05c26ce12ea320a673925efe0efd22bc8760d2c11005a51d91e772211aa320c",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// aggregate and proof phase0
 			Pubkey:             pubkeyStr,
 			RawBody:            phase0AggregateAndProof,
-			ExpectedSignature:  "0x948374e0d1cee36e83a9a9605994b250686748fe2280be4b5808fe1451a76bc2c97ce7aca81490499b487de921f87e820fa8dced7ad65ef847d61b42ac2c38f0742e3e93ad4d551a9209ee549279745b4d8692d4798c181880df746f5be9b6b3",
+			ExpectedSignature:  "0x82a49a8b6912e8336cd43ef09f2f2902348cad0642a70923cb73482da85f1e7b3e56b99af2c18300725481c45fba9923055fb3463a0ded750a68a17e2dc0a6ada131caa434bb2112733158c71425fd6bef614a092a3945f34a73b55857e764a5",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// aggregate and proof electra
 			Pubkey:             pubkeyStr,
 			RawBody:            electraAggregateAndProof,
-			ExpectedSignature:  "0x99dcab3d9f2bdcdf5d55087ca029992d0e6e604c116a6284c7a61caa072d94dffc950251e2688623e3a911a24cbb27fc1214a89eb7fa9d081cea7d19c5b2b33f21539b3687ea6fb58e25292174b8a914e8a6d8eb9cdcbed5972c6f39e1907c65",
+			ExpectedSignature:  "0xb31b20a8c870bed23ae3cf0ba09b15ae0d66cd6b95174c5f32bfb033d1b8ce79f422da642d6023122c4b2949434ee5c20a97d6fe96fe51534ca4aa1c1d024d28048150409a4fd17764e0c75e06c5851bb24a3c454dd6f0e8b922c351c3d861b2",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 		{
 			// aggregation slot sligning
 			Pubkey:             pubkeyStr,
 			SignableMsg:        aggregationSlotSigning(),
-			ExpectedSignature:  "0x957a9432ec632e1bbb4af8a047fa65b01bf29bf330af7f2a368c22130df2436c728ea5bce776fd62df276a9a04106015019dff6026e7a6abcfe2f53828c5c6c14c9864b814b1790317160f3141a79a8ce408205f1e008a9ced84f9f421de2cac",
+			ExpectedSignature:  "0x8cce53bbd1d0bf982c1fe15575b2bb77237be3e6488ea9ebc1be7b40f3521f8a3228a8d60192a53e1b74787e9cccbea304af936809e962bb3fc756ec04e691e41b3e279895a5282186b16de0a5a8973ea99d056df20ab11c41bcd83777611ef5",
 			ExpectedHttpStatus: http.StatusOK,
 		},
 	}

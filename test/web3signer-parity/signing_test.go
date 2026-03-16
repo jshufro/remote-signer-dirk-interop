@@ -12,9 +12,7 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/test/client"
 )
 
-const expectedSignaturesFile = "expected_signatures.json"
-
-func TestSigning(t *testing.T) {
+func TestParitySigning(t *testing.T) {
 	testCases := test.InteropSigningTestCases()
 
 	url := "http://localhost:9000"

@@ -17,6 +17,7 @@ func TestCalculateDomain(t *testing.T) {
 	domain, err := dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
+		Epoch:           "100",
 	})
 	if err != nil {
 		t.Fatalf("failed to calculate domain: %v", err)
@@ -34,6 +35,7 @@ func TestCalculateDomain(t *testing.T) {
 	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0xgg", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
+		Epoch:           "100",
 	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -41,6 +43,7 @@ func TestCalculateDomain(t *testing.T) {
 	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x12", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
+		Epoch:           "100",
 	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -50,6 +53,7 @@ func TestCalculateDomain(t *testing.T) {
 	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0x1234567890",
 		PreviousVersion: "0x00000000",
+		Epoch:           "100",
 	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -60,8 +64,22 @@ func TestCalculateDomain(t *testing.T) {
 	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0xgg",
 		PreviousVersion: "0x00000000",
+		Epoch:           "100",
 	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
+	}
+
+	// Invalid epoch should produce an error
+	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
+		CurrentVersion:  "0x00000000",
+		PreviousVersion: "0x00000000",
+		Epoch:           "not-a-number",
+	})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to parse fork epoch") {
+		t.Fatalf("error is not correct: %v", err)
 	}
 }

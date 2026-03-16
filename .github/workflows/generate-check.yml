@@ -67,3 +67,50 @@ jobs:
         with:
           name: coverage
           path: coverage.out
+
+  test-parity:
+    #runs-on: ubuntu-latest
+    #steps:
+    #  - uses: actions/checkout@v4
+    #    with:
+    #      submodules: recursive
+
+    #  - name: Set up Go
+    #    uses: actions/setup-go@v5
+    #    with:
+    #      go-version: "1.25.8"
+
+    #  - name: Run web3signer docker container
+    #    run: cd test/web3signer-parity && make ci
+    #      test-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.8"
+      - name: Start web3signer (parity)
+        working-directory: test/web3signer-parity
+        run: |
+          docker run -d \
+            --network host \
+            --name web3signer-parity \
+            -v "$PWD/key_config.yaml":/app/keys/key_config.yaml \
+            -v "$PWD/config.yaml":/app/config.yaml \
+            consensys/web3signer:develop \
+            --config-file /app/config.yaml \
+            eth2
+      - name: Wait until web3signer is healthy
+        working-directory: test/web3signer-parity
+        run: ./wait-until-healthy.sh
+      - name: Run parity tests
+        run: go test ./test/web3signer-parity/...
+      - name: Dump web3signer logs
+        if: always()
+        run: docker logs web3signer-parity || true
+      - name: Stop web3signer
+        if: always()
+        run: docker stop web3signer-parity || true

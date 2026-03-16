@@ -1,0 +1,7 @@
+key-store-path: /app/keys/
+http-cors-origins: ["*"]
+http-host-allowlist: "*"
+logging: ALL 
+
+eth2.slashing-protection-enabled: false
+eth2.network: "mainnet"
