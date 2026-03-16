@@ -1,3 +1,4 @@
+[![Go Reference](https://pkg.go.dev/badge/github.com/jshufro/remote-signer-dirk-interop.svg)](https://pkg.go.dev/github.com/jshufro/remote-signer-dirk-interop) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0) [![Go generate & lint](https://github.com/jshufro/remote-signer-dirk-interop/actions/workflows/generate-check.yml/badge.svg)](https://github.com/jshufro/remote-signer-dirk-interop/actions/workflows/generate-check.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/jshufro/remote-signer-dirk-interop)](https://goreportcard.com/report/github.com/jshufro/remote-signer-dirk-interop)
 ### remote-signer-dirk-interop
 
 `remote-signer-dirk-interop` is a small HTTP service that implements the [Ethereum remote-signer API](https://github.com/ethereum/remote-signing-api) and forwards all signing requests to a [Dirk](http://github.com/attestantio/dirk) signer or signing cluster.
