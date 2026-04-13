@@ -839,6 +839,13 @@ type SyncCommitteeContributionAndProofSigning struct {
 // SyncCommitteeContributionAndProofSigningType Signing Request type
 type SyncCommitteeContributionAndProofSigningType string
 
+// SyncCommitteeMessage defines model for SyncCommitteeMessage.
+type SyncCommitteeMessage struct {
+	// BeaconBlockRoot Bytes32 hexadecimal
+	BeaconBlockRoot string `json:"beacon_block_root,omitempty"`
+	Slot            string `json:"slot,omitempty"`
+}
+
 // SyncCommitteeMessageSigning defines model for SyncCommitteeMessageSigning.
 type SyncCommitteeMessageSigning struct {
 	ForkInfo struct {

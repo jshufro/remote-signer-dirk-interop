@@ -12,7 +12,6 @@ types:
   BeaconBlockAltair: altair.BeaconBlock
   BeaconBlockHeader: phase0.BeaconBlockHeader
   VoluntaryExit: phase0.VoluntaryExit
-  SyncCommitteeMessage: altair.SyncCommitteeMessage
   SyncAggregatorSelectionData: altair.SyncAggregatorSelectionData
   ContributionAndProof: altair.ContributionAndProof
   ValidatorRegistration: apiv1.ValidatorRegistration

@@ -15,7 +15,6 @@ output-options:
     - "BeaconBlockHeader"
     - "BeaconBlockBody"
     - "VoluntaryExit"
-    - "SyncCommitteeMessage"
     - "SyncCommitteeContribution"
     - "SyncAggregatorSelectionData"
     - "ContributionAndProof"

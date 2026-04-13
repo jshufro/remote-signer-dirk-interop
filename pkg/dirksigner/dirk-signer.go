@@ -514,8 +514,16 @@ func (d *DirkSigner) VoluntaryExitSigning(ctx context.Context, account e2wt.Acco
 }
 
 func (d *DirkSigner) SyncCommitteeMessageSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.SyncCommitteeMessageSigning) ([96]byte, error) {
+	slot, err := strconv.ParseUint(obj.SyncCommitteeMessage.Slot, 10, 64)
+	if err != nil {
+		return [96]byte{}, errors.BadRequest("failed to parse slot: %w", err)
+	}
+	beaconBlockRoot, err := decodeHex(obj.SyncCommitteeMessage.BeaconBlockRoot)
+	if err != nil {
+		return [96]byte{}, errors.BadRequest("failed to decode beacon block root: %w", err)
+	}
 
-	epoch := obj.SyncCommitteeMessage.Slot / 32
+	epoch := slot / 32
 
 	// Compute the domain
 	domain, err := d.calculateDomain(
@@ -529,7 +537,7 @@ func (d *DirkSigner) SyncCommitteeMessageSigning(ctx context.Context, account e2
 		return [96]byte{}, errors.InternalServerError()
 	}
 
-	signature, err := account.SignGeneric(ctx, obj.SyncCommitteeMessage.BeaconBlockRoot[:], domain[:])
+	signature, err := account.SignGeneric(ctx, beaconBlockRoot[:], domain[:])
 	if err != nil {
 		d.log.Warn("failed to sign sync committee message", "error", err)
 		return [96]byte{}, errors.InternalServerError()
