@@ -150,8 +150,19 @@ func main() {
 	service.SetLogger(log)
 	service.SetTimeout(cfg.Dirk.Timeout)
 
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthcheck", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		n, err := w.Write([]byte("{\"status\":\"UP\",\"outcome\":\"UP\",\"checks\":[]}"))
+		if err != nil {
+			log.Error("failed to write healthcheck response", "error", err, "bytes_written", n)
+		}
+	})
+
 	server := http.Server{
-		Handler: api.Handler(service),
+		Handler: api.HandlerWithOptions(service, api.StdHTTPServerOptions{
+			BaseRouter: mux,
+		}),
 	}
 
 	// Trap sigterm to gracefully shutdown the server

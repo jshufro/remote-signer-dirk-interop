@@ -196,10 +196,8 @@ func syncCommitteeMessageSigning() *api.SyncCommitteeMessageSigning {
 	return &api.SyncCommitteeMessageSigning{
 		Type: api.SYNCCOMMITTEEMESSAGE,
 		SyncCommitteeMessage: api.SyncCommitteeMessage{
-			Slot:            6209536,
-			BeaconBlockRoot: TestRoot1,
-			ValidatorIndex:  100,
-			Signature:       TestSignature1,
+			Slot:            "6209536",
+			BeaconBlockRoot: TestRoot1Str,
 		},
 		ForkInfo: fork,
 	}
