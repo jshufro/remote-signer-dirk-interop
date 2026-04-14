@@ -12,10 +12,33 @@ import (
 
 func (d *DirkSigner) calculateDomain(
 	domainType domains.DomainType,
+	forkInfo struct {
+		Fork                  api.Fork `json:"fork"`
+		GenesisValidatorsRoot string   `json:"genesis_validators_root"`
+	},
+	epoch uint64,
+) ([]byte, error) {
+	out, err := calculateDomainImpl(domainType, &forkInfo.Fork, forkInfo.GenesisValidatorsRoot, epoch)
+	if err != nil {
+		// Expected error, return it to the caller
+		if _, ok := err.(errors.SignerError); ok {
+			return nil, err
+		}
+		// Unexpected error, log and return internal server error
+		d.log.Warn("failed to compute domain", "error", err)
+		return nil, errors.InternalServerError()
+	}
+	d.log.Debug("computed domain", "domain", fmt.Sprintf("%#x", out))
+	return out, nil
+}
+
+func calculateDomainImpl(
+	domainType domains.DomainType,
+	fork *api.Fork,
 	genesisValidatorsRoot string,
 	epoch uint64,
-	fork *api.Fork,
 ) ([]byte, error) {
+
 	genesisValidatorsRootBytes, err := decodeHex(genesisValidatorsRoot)
 	if err != nil {
 		return nil, errors.BadRequest("failed to decode genesis validators root: %w", err)
@@ -42,15 +65,9 @@ func (d *DirkSigner) calculateDomain(
 		return nil, errors.BadRequest("fork version is not 4 bytes")
 	}
 
-	out, nErr := signing.ComputeDomain(
+	return signing.ComputeDomain(
 		domainType,
 		forkVersion,
 		genesisValidatorsRootBytes,
 	)
-	d.log.Debug("computed domain", "domain", fmt.Sprintf("%#x", out))
-	if nErr != nil {
-		d.log.Warn("failed to compute domain", "error", nErr)
-		return nil, errors.InternalServerError()
-	}
-	return out, nil
 }

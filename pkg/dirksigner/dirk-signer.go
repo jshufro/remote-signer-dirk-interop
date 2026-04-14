@@ -143,10 +143,8 @@ func (d *DirkSigner) AggregationSlotSigning(ctx context.Context, account e2wt.Ac
 	// Compute the domain
 	domain, err := d.calculateDomain(
 		domains.DomainSelectionProof,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		epoch,
-		&obj.ForkInfo.Fork,
-	)
+		obj.ForkInfo,
+		epoch)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
 		return [96]byte{}, errors.InternalServerError()
@@ -202,9 +200,8 @@ func (d *DirkSigner) AggregateAndProofSigningV2(ctx context.Context, account e2w
 
 	domain, err := d.calculateDomain(
 		domains.DomainAggregateAndProof,
-		obj.ForkInfo.GenesisValidatorsRoot,
+		obj.ForkInfo,
 		epoch,
-		&obj.ForkInfo.Fork,
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
@@ -225,9 +222,8 @@ func (d *DirkSigner) AttestationSigning(ctx context.Context, account e2wt.Accoun
 	epoch := uint64(attestation.Slot / 32)
 	domain, err := d.calculateDomain(
 		domains.DomainBeaconAttester,
-		obj.ForkInfo.GenesisValidatorsRoot,
+		obj.ForkInfo,
 		epoch,
-		&obj.ForkInfo.Fork,
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
@@ -276,9 +272,8 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, account e2wt.Accoun
 		epoch := phase0Block.Block.Slot / 32
 		domain, err := d.calculateDomain(
 			domains.DomainBeaconProposer,
-			obj.ForkInfo.GenesisValidatorsRoot,
+			obj.ForkInfo,
 			uint64(epoch),
-			&obj.ForkInfo.Fork,
 		)
 		if err != nil {
 			d.log.Warn("failed to compute domain", "error", err)
@@ -312,9 +307,8 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, account e2wt.Accoun
 		epoch := altairBlock.Block.Slot / 32
 		domain, err := d.calculateDomain(
 			domains.DomainBeaconProposer,
-			obj.ForkInfo.GenesisValidatorsRoot,
+			obj.ForkInfo,
 			uint64(epoch),
-			&obj.ForkInfo.Fork,
 		)
 		if err != nil {
 			d.log.Warn("failed to compute domain", "error", err)
@@ -373,9 +367,8 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, account e2wt.Accoun
 	epoch := uint64(header.Slot / 32)
 	domain, err := d.calculateDomain(
 		domains.DomainBeaconProposer,
-		obj.ForkInfo.GenesisValidatorsRoot,
+		obj.ForkInfo,
 		epoch,
-		&obj.ForkInfo.Fork,
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
@@ -467,9 +460,8 @@ func (d *DirkSigner) RandaoRevealSigning(ctx context.Context, account e2wt.Accou
 	// Compute the domain
 	domain, err := d.calculateDomain(
 		domains.DomainRandao,
-		obj.ForkInfo.GenesisValidatorsRoot,
+		obj.ForkInfo,
 		epoch,
-		&obj.ForkInfo.Fork,
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
@@ -495,9 +487,8 @@ func (d *DirkSigner) VoluntaryExitSigning(ctx context.Context, account e2wt.Acco
 	// Compute the domain
 	domain, err := d.calculateDomain(
 		domains.DomainVoluntaryExit,
-		obj.ForkInfo.GenesisValidatorsRoot,
+		obj.ForkInfo,
 		uint64(obj.VoluntaryExit.Epoch),
-		&obj.ForkInfo.Fork,
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
@@ -528,9 +519,8 @@ func (d *DirkSigner) SyncCommitteeMessageSigning(ctx context.Context, account e2
 	// Compute the domain
 	domain, err := d.calculateDomain(
 		domains.DomainSyncCommittee,
-		obj.ForkInfo.GenesisValidatorsRoot,
+		obj.ForkInfo,
 		uint64(epoch),
-		&obj.ForkInfo.Fork,
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
@@ -558,9 +548,8 @@ func (d *DirkSigner) SyncCommitteeSelectionProofSigning(ctx context.Context, acc
 	// Compute the domain
 	domain, err := d.calculateDomain(
 		domains.DomainSyncCommiteeSelectionProof,
-		obj.ForkInfo.GenesisValidatorsRoot,
+		obj.ForkInfo,
 		uint64(epoch),
-		&obj.ForkInfo.Fork,
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)
@@ -588,9 +577,8 @@ func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Contex
 	// Compute the domain
 	domain, err := d.calculateDomain(
 		domains.DomainSyncContributionAndProof,
-		obj.ForkInfo.GenesisValidatorsRoot,
+		obj.ForkInfo,
 		uint64(epoch),
-		&obj.ForkInfo.Fork,
 	)
 	if err != nil {
 		d.log.Warn("failed to compute domain", "error", err)

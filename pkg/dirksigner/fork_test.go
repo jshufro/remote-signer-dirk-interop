@@ -7,14 +7,14 @@ import (
 
 	api "github.com/jshufro/remote-signer-dirk-interop/generated"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
-	"github.com/neilotoole/slogt"
 )
 
+func domain(domain domains.DomainType, genesisValidatorsRoot string, epoch uint64, fork *api.Fork) ([]byte, error) {
+	return calculateDomainImpl(domain, fork, genesisValidatorsRoot, epoch)
+}
+
 func TestCalculateDomain(t *testing.T) {
-	dirk := DirkSigner{
-		log: slogt.New(t),
-	}
-	domain, err := dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
+	d, err := domain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
 		Epoch:           "100",
@@ -27,12 +27,12 @@ func TestCalculateDomain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to decode expected domain: %v", err)
 	}
-	if !bytes.Equal(domain, expectedDomainBytes) {
-		t.Fatalf("domain is not correct: %x", domain)
+	if !bytes.Equal(d, expectedDomainBytes) {
+		t.Fatalf("domain is not correct: %x", d)
 	}
 
 	// Invalid genesis validator root should produce an error
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0xgg", 100, &api.Fork{
+	_, err = domain(domains.DomainAggregateAndProof, "0xgg", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
 		Epoch:           "100",
@@ -40,7 +40,7 @@ func TestCalculateDomain(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x12", 100, &api.Fork{
+	_, err = domain(domains.DomainAggregateAndProof, "0x12", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
 		Epoch:           "100",
@@ -50,7 +50,7 @@ func TestCalculateDomain(t *testing.T) {
 	}
 
 	// Invalid current version should produce an error
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
+	_, err = domain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0x1234567890",
 		PreviousVersion: "0x00000000",
 		Epoch:           "100",
@@ -61,7 +61,7 @@ func TestCalculateDomain(t *testing.T) {
 	if !strings.Contains(err.Error(), "fork version is not 4 bytes") {
 		t.Fatalf("error is not correct: %v", err)
 	}
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
+	_, err = domain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0xgg",
 		PreviousVersion: "0x00000000",
 		Epoch:           "100",
@@ -71,7 +71,7 @@ func TestCalculateDomain(t *testing.T) {
 	}
 
 	// Invalid epoch should produce an error
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
+	_, err = domain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 100, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0x00000000",
 		Epoch:           "not-a-number",
@@ -84,7 +84,7 @@ func TestCalculateDomain(t *testing.T) {
 	}
 
 	// Invalid previous version should produce an error
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 10, &api.Fork{
+	_, err = domain(domains.DomainAggregateAndProof, "0x0000000000000000000000000000000000000000000000000000000000000000", 10, &api.Fork{
 		CurrentVersion:  "0x00000000",
 		PreviousVersion: "0xgg",
 		Epoch:           "100",
