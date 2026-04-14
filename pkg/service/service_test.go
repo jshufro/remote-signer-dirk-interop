@@ -59,7 +59,7 @@ func (f *fakeSigner) AttestationSigning(context.Context, fakeAccount, *api.Attes
 func (f *fakeSigner) BeaconBlockSigning(context.Context, fakeAccount, *api.BeaconBlockSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) DepositSigning(context.Context, fakeAccount, *api.DepositSigning, *fork.ForkInfo) ([96]byte, error) {
+func (f *fakeSigner) DepositSigning(context.Context, fakeAccount, *api.DepositSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
 func (f *fakeSigner) RandaoRevealSigning(context.Context, fakeAccount, *api.RandaoRevealSigning, *fork.ForkInfo) ([96]byte, error) {
@@ -77,7 +77,7 @@ func (f *fakeSigner) SyncCommitteeSelectionProofSigning(context.Context, fakeAcc
 func (f *fakeSigner) SyncCommitteeContributionAndProofSigning(context.Context, fakeAccount, *api.SyncCommitteeContributionAndProofSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) ValidatorRegistrationSigning(context.Context, fakeAccount, *api.ValidatorRegistrationSigning, *fork.ForkInfo) ([96]byte, error) {
+func (f *fakeSigner) ValidatorRegistrationSigning(context.Context, fakeAccount, *api.ValidatorRegistrationSigning) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
 

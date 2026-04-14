@@ -18,13 +18,13 @@ type Signer[AccountType any] interface {
 	AggregateAndProofSigningV2(context.Context, AccountType, *api.AggregateAndProofSigningV2, *fork.ForkInfo) ([96]byte, error)
 	AttestationSigning(context.Context, AccountType, *api.AttestationSigning, *fork.ForkInfo) ([96]byte, error)
 	BeaconBlockSigning(context.Context, AccountType, *api.BeaconBlockSigning, *fork.ForkInfo) ([96]byte, error)
-	DepositSigning(context.Context, AccountType, *api.DepositSigning, *fork.ForkInfo) ([96]byte, error)
+	DepositSigning(context.Context, AccountType, *api.DepositSigning) ([96]byte, error)
 	RandaoRevealSigning(context.Context, AccountType, *api.RandaoRevealSigning, *fork.ForkInfo) ([96]byte, error)
 	VoluntaryExitSigning(context.Context, AccountType, *api.VoluntaryExitSigning, *fork.ForkInfo) ([96]byte, error)
 	SyncCommitteeMessageSigning(context.Context, AccountType, *api.SyncCommitteeMessageSigning, *fork.ForkInfo) ([96]byte, error)
 	SyncCommitteeSelectionProofSigning(context.Context, AccountType, *api.SyncCommitteeSelectionProofSigning, *fork.ForkInfo) ([96]byte, error)
 	SyncCommitteeContributionAndProofSigning(context.Context, AccountType, *api.SyncCommitteeContributionAndProofSigning, *fork.ForkInfo) ([96]byte, error)
-	ValidatorRegistrationSigning(context.Context, AccountType, *api.ValidatorRegistrationSigning, *fork.ForkInfo) ([96]byte, error)
+	ValidatorRegistrationSigning(context.Context, AccountType, *api.ValidatorRegistrationSigning) ([96]byte, error)
 }
 
 // StringToSignableType converts a discriminator string to a signable type.
@@ -57,8 +57,37 @@ func StringToSignableType(discriminator string) (any, error) {
 	}
 }
 
+// ForkInfoRequired returns true if the signable requires a fork info.
+func ForkInfoRequired(signable any) bool {
+	switch signable.(type) {
+	case *api.AggregationSlotSigning:
+		return true
+	case *api.AggregateAndProofSigningV2:
+		return true
+	case *api.AttestationSigning:
+		return true
+	case *api.BeaconBlockSigning:
+		return true
+	case *api.RandaoRevealSigning:
+		return true
+	case *api.VoluntaryExitSigning:
+		return true
+	case *api.SyncCommitteeMessageSigning:
+		return true
+	case *api.SyncCommitteeSelectionProofSigning:
+		return true
+	case *api.SyncCommitteeContributionAndProofSigning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Sign calls the appropriate sign method based on the type of the signable.
 func Sign[AccountType any](ctx context.Context, signer Signer[AccountType], account AccountType, signable any, forkInfo *fork.ForkInfo) ([96]byte, error) {
+	if ForkInfoRequired(signable) && forkInfo == nil {
+		return [96]byte{}, errors.BadRequest("fork_info is required")
+	}
 	switch signable := signable.(type) {
 	case *api.AggregationSlotSigning:
 		return signer.AggregationSlotSigning(ctx, account, signable, forkInfo)
@@ -69,7 +98,7 @@ func Sign[AccountType any](ctx context.Context, signer Signer[AccountType], acco
 	case *api.BeaconBlockSigning:
 		return signer.BeaconBlockSigning(ctx, account, signable, forkInfo)
 	case *api.DepositSigning:
-		return signer.DepositSigning(ctx, account, signable, forkInfo)
+		return signer.DepositSigning(ctx, account, signable)
 	case *api.RandaoRevealSigning:
 		return signer.RandaoRevealSigning(ctx, account, signable, forkInfo)
 	case *api.VoluntaryExitSigning:
@@ -81,7 +110,7 @@ func Sign[AccountType any](ctx context.Context, signer Signer[AccountType], acco
 	case *api.SyncCommitteeContributionAndProofSigning:
 		return signer.SyncCommitteeContributionAndProofSigning(ctx, account, signable, forkInfo)
 	case *api.ValidatorRegistrationSigning:
-		return signer.ValidatorRegistrationSigning(ctx, account, signable, forkInfo)
+		return signer.ValidatorRegistrationSigning(ctx, account, signable)
 	default:
 		return [96]byte{}, errors.InternalServerError()
 	}

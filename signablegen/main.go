@@ -23,9 +23,10 @@ type Import struct {
 }
 
 type Mappings struct {
-	Imports         []Import          `yaml:"imports"`
-	Types           map[string]string `yaml:"types"`
-	DeprecatedTypes []string          `yaml:"deprecated-types"`
+	Imports              []Import          `yaml:"imports"`
+	Types                map[string]string `yaml:"types"`
+	DeprecatedTypes      []string          `yaml:"deprecated-types"`
+	ForkInfoIgnoredTypes []string          `yaml:"fork-info-ignored-types"`
 }
 
 func (i Import) String() string {
@@ -259,6 +260,10 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 		if _, ok := skipTypes[name]; ok {
 			continue
 		}
+		if slices.Contains(mappings.ForkInfoIgnoredTypes, name) {
+			writef("\t%s(context.Context, AccountType, *%s.%s) ([96]byte, error)\n", name, replacementsPkgname, name)
+			continue
+		}
 		writef("\t%s(context.Context, AccountType, *%s.%s, *fork.ForkInfo) ([96]byte, error)\n", name, replacementsPkgname, name)
 	}
 	write("}\n")
@@ -286,8 +291,29 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	write("\t}\n")
 	write("}\n")
 	write("\n")
+	write("// ForkInfoRequired returns true if the signable requires a fork info.\n")
+	write("func ForkInfoRequired(signable any) bool {\n")
+	write("\tswitch signable.(type) {\n")
+	for _, name := range schemaNames {
+		if _, ok := skipTypes[name]; ok {
+			continue
+		}
+		if slices.Contains(mappings.ForkInfoIgnoredTypes, name) {
+			continue
+		}
+		writef("\tcase *%s.%s:\n", replacementsPkgname, name)
+		writef("\t\treturn true\n")
+	}
+	write("\tdefault:\n")
+	write("\t\treturn false\n")
+	write("\t}\n")
+	write("}\n")
+	write("\n")
 	write("// Sign calls the appropriate sign method based on the type of the signable.\n")
 	write("func Sign[AccountType any](ctx context.Context, signer Signer[AccountType], account AccountType, signable any, forkInfo *fork.ForkInfo) ([96]byte, error) {\n")
+	write("\tif ForkInfoRequired(signable) && forkInfo == nil {\n")
+	write("\t\treturn [96]byte{}, errors.BadRequest(\"fork_info is required\")\n")
+	write("\t}\n")
 	write("\tswitch signable := signable.(type) {\n")
 
 	for _, name := range schemaNames {
@@ -295,6 +321,10 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 			continue
 		}
 		writef("\tcase *%s.%s:\n", replacementsPkgname, name)
+		if slices.Contains(mappings.ForkInfoIgnoredTypes, name) {
+			writef("\t\treturn signer.%s(ctx, account, signable)\n", name)
+			continue
+		}
 		writef("\t\treturn signer.%s(ctx, account, signable, forkInfo)\n", name)
 	}
 

@@ -127,16 +127,6 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 		return
 	}
 
-	// Ensure fork_info is provided
-	// It's kind of annoying, fork_info is actually optional for validator_registration
-	_, isValidatorRegistration := signable.(*api.ValidatorRegistrationSigning)
-	_, isDeposit := signable.(*api.DepositSigning)
-	if genericBody.ForkInfo == nil && !isValidatorRegistration && !isDeposit {
-		s.log.Error("fork_info not provided")
-		s.writeErrorJSON(w, errors.BadRequest("fork_info is required"))
-		return
-	}
-
 	// Sign the object
 	signature, signerErr := generated.Sign(ctx, s.signer, account, signable, genericBody.ForkInfo)
 	if signerErr != nil {

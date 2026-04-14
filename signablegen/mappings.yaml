@@ -18,3 +18,6 @@ types:
 deprecated-types:
   - BlockSigning
   - AggregateAndProofSigning
+fork-info-ignored-types:
+  - ValidatorRegistrationSigning
+  - DepositSigning

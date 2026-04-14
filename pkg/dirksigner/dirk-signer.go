@@ -431,7 +431,6 @@ func (d *DirkSigner) DepositSigning(
 	ctx context.Context,
 	account e2wt.AccountProtectingSigner,
 	obj *api.DepositSigning,
-	forkInfo *fork.ForkInfo,
 ) ([96]byte, error) {
 	// Grab the genesis fork version string first
 	genesisForkVersion, err := typeconv.DecodeHex(obj.Deposit.GenesisForkVersion)
@@ -664,7 +663,6 @@ func (d *DirkSigner) ValidatorRegistrationSigning(
 	ctx context.Context,
 	account e2wt.AccountProtectingSigner,
 	obj *api.ValidatorRegistrationSigning,
-	forkInfo *fork.ForkInfo,
 ) ([96]byte, error) {
 
 	hashTreeRoot, err := obj.ValidatorRegistration.HashTreeRoot()
