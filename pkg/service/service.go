@@ -11,8 +11,10 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/generated/api"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/errors"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/fork"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 )
 
@@ -65,7 +67,8 @@ func (s *Service[AccountType]) PUBLICKEYLIST(w http.ResponseWriter, r *http.Requ
 }
 
 type GenericBody struct {
-	Type string `json:"type"`
+	Type     string        `json:"type"`
+	ForkInfo fork.ForkInfo `json:"fork_info"`
 }
 
 func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, identifier string) {
@@ -107,7 +110,7 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 	}
 
 	// Get a full signable struct from the type
-	signable, err := api.StringToSignableType(genericBody.Type)
+	signable, err := generated.StringToSignableType(genericBody.Type)
 	if err != nil {
 		s.log.Error("failed to get signable type", "error", err)
 		s.writeErrorJSON(w, errors.BadRequest("unknown signing type: %w", err))
@@ -125,7 +128,7 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 	}
 
 	// Sign the object
-	signature, signerErr := api.Sign(ctx, s.signer, account, signable)
+	signature, signerErr := generated.Sign(ctx, s.signer, account, signable, &genericBody.ForkInfo)
 	if signerErr != nil {
 		s.log.Error("failed to sign object", "error", signerErr.Error())
 		s.writeErrorJSON(w, signerErr)

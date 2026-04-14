@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"strings"
 
-	externalRef0 "github.com/jshufro/remote-signer-dirk-interop/generated"
+	externalRef0 "github.com/jshufro/remote-signer-dirk-interop/generated/api"
 	"github.com/oapi-codegen/runtime"
 )
 

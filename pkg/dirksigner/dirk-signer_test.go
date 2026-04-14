@@ -3,15 +3,16 @@ package dirksigner
 import (
 	"bytes"
 	"log/slog"
-	"strings"
 	"testing"
 
 	e2t "github.com/wealdtech/go-eth2-types/v2"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
 
-	api "github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/generated/api"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/fork"
 	tlstest "github.com/jshufro/remote-signer-dirk-interop/pkg/tls/test"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/typeconv"
 )
 
 // Most of the coverage is in end-to-end tests,
@@ -97,37 +98,20 @@ func TestCalculateDomainError(t *testing.T) {
 		nil,
 	)
 
-	_, err := dirk.calculateDomain(domains.DomainAggregateAndProof, struct {
-		Fork                  api.Fork `json:"fork"`
-		GenesisValidatorsRoot string   `json:"genesis_validators_root"`
-	}{
-		Fork: api.Fork{
-			CurrentVersion:  "0x00000000",
-			PreviousVersion: "0x00000000",
-			Epoch:           "101",
+	gvr, err := typeconv.DecodeHex("0x0000000000000000000000000000000000000000000000000000000000000000")
+	if err != nil {
+		t.Fatalf("failed to decode genesis validators root: %v", err)
+	}
+	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, &fork.ForkInfo{
+		Fork: &fork.Fork{
+			CurrentVersion:  []byte{0x00, 0x00, 0x00, 0x00},
+			PreviousVersion: []byte{0x00, 0x00, 0x00, 0x00},
+			Epoch:           100,
 		},
-		GenesisValidatorsRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		GenesisValidatorsRoot: gvr,
 	}, 100)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-
-	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, struct {
-		Fork                  api.Fork `json:"fork"`
-		GenesisValidatorsRoot string   `json:"genesis_validators_root"`
-	}{
-		Fork: api.Fork{
-			CurrentVersion:  "0x00000000",
-			PreviousVersion: "0x00000000",
-			Epoch:           "invalid",
-		},
-		GenesisValidatorsRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
-	}, 100)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "failed to parse fork epoch") {
-		t.Fatalf("error is not correct: %v", err)
 	}
 }
 
@@ -148,7 +132,7 @@ func TestAggregationSlotSigning(t *testing.T) {
 		}{
 			Slot: "invalid",
 		},
-	})
+	}, nil)
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
 	}

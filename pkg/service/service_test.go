@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/generated/api"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/errors"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/fork"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 )
 
@@ -41,7 +42,7 @@ func (f *fakeSigner) GetAccountForPubkey(ctx context.Context, pubkey [48]byte) (
 	return fakeAccount{}, nil
 }
 
-func (f *fakeSigner) AggregationSlotSigning(ctx context.Context, pubkey fakeAccount, obj *api.AggregationSlotSigning) ([96]byte, error) {
+func (f *fakeSigner) AggregationSlotSigning(ctx context.Context, pubkey fakeAccount, obj *api.AggregationSlotSigning, forkInfo *fork.ForkInfo) ([96]byte, error) {
 	if f.shouldError {
 		return [96]byte{}, errors.InternalServerError()
 	}
@@ -49,34 +50,34 @@ func (f *fakeSigner) AggregationSlotSigning(ctx context.Context, pubkey fakeAcco
 }
 
 // Satisfy the api.Signer interface with stubs; not used in this test.
-func (f *fakeSigner) AggregateAndProofSigningV2(context.Context, fakeAccount, *api.AggregateAndProofSigningV2) ([96]byte, error) {
+func (f *fakeSigner) AggregateAndProofSigningV2(context.Context, fakeAccount, *api.AggregateAndProofSigningV2, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) AttestationSigning(context.Context, fakeAccount, *api.AttestationSigning) ([96]byte, error) {
+func (f *fakeSigner) AttestationSigning(context.Context, fakeAccount, *api.AttestationSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) BeaconBlockSigning(context.Context, fakeAccount, *api.BeaconBlockSigning) ([96]byte, error) {
+func (f *fakeSigner) BeaconBlockSigning(context.Context, fakeAccount, *api.BeaconBlockSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) DepositSigning(context.Context, fakeAccount, *api.DepositSigning) ([96]byte, error) {
+func (f *fakeSigner) DepositSigning(context.Context, fakeAccount, *api.DepositSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) RandaoRevealSigning(context.Context, fakeAccount, *api.RandaoRevealSigning) ([96]byte, error) {
+func (f *fakeSigner) RandaoRevealSigning(context.Context, fakeAccount, *api.RandaoRevealSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) VoluntaryExitSigning(context.Context, fakeAccount, *api.VoluntaryExitSigning) ([96]byte, error) {
+func (f *fakeSigner) VoluntaryExitSigning(context.Context, fakeAccount, *api.VoluntaryExitSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) SyncCommitteeMessageSigning(context.Context, fakeAccount, *api.SyncCommitteeMessageSigning) ([96]byte, error) {
+func (f *fakeSigner) SyncCommitteeMessageSigning(context.Context, fakeAccount, *api.SyncCommitteeMessageSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) SyncCommitteeSelectionProofSigning(context.Context, fakeAccount, *api.SyncCommitteeSelectionProofSigning) ([96]byte, error) {
+func (f *fakeSigner) SyncCommitteeSelectionProofSigning(context.Context, fakeAccount, *api.SyncCommitteeSelectionProofSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) SyncCommitteeContributionAndProofSigning(context.Context, fakeAccount, *api.SyncCommitteeContributionAndProofSigning) ([96]byte, error) {
+func (f *fakeSigner) SyncCommitteeContributionAndProofSigning(context.Context, fakeAccount, *api.SyncCommitteeContributionAndProofSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
-func (f *fakeSigner) ValidatorRegistrationSigning(context.Context, fakeAccount, *api.ValidatorRegistrationSigning) ([96]byte, error) {
+func (f *fakeSigner) ValidatorRegistrationSigning(context.Context, fakeAccount, *api.ValidatorRegistrationSigning, *fork.ForkInfo) ([96]byte, error) {
 	return [96]byte{}, errors.InternalServerError()
 }
 

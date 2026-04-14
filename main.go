@@ -14,7 +14,7 @@ import (
 	"syscall"
 
 	"github.com/jshufro/remote-signer-dirk-interop/config"
-	api "github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/generated/api"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/service"
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
