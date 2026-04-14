@@ -4,7 +4,7 @@ generate:
   client: true
 output: client/remote_signing_client.gen.go
 import-mapping:
-  ../schemas.yaml: "github.com/jshufro/remote-signer-dirk-interop/internal/api" 
+  ../schemas.yaml: "github.com/jshufro/remote-signer-dirk-interop/generated" 
 output-options:
   skip-prune: true
   prefer-skip-optional-pointer: true

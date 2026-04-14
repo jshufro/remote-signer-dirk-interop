@@ -14,10 +14,10 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/herumi/bls-eth-go-binary/bls"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/domains"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
+	api "github.com/jshufro/remote-signer-dirk-interop/generated"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner/dirk"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/errors"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
 

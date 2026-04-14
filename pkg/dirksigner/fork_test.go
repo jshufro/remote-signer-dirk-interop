@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/domains"
+	api "github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
 	"github.com/neilotoole/slogt"
 )
 

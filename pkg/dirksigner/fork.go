@@ -5,9 +5,9 @@ import (
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/domains"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
+	api "github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/errors"
 )
 
 func (d *DirkSigner) calculateDomain(

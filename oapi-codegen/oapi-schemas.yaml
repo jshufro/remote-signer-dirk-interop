@@ -1,7 +1,7 @@
-package: api 
+package: generated 
 generate:
   models: true
-output: internal/api/schemas.gen.go
+output: generated/schemas.gen.go
 output-options:
   skip-prune: true
   prefer-skip-optional-pointer: true

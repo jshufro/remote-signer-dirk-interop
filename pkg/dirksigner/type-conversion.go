@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/errors"
 )
 
 func decodeHex(hexStr string) ([]byte, error) {

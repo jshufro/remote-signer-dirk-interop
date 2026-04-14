@@ -3,7 +3,7 @@ package signer
 import (
 	"context"
 
-	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
+	api "github.com/jshufro/remote-signer-dirk-interop/generated"
 )
 
 type RemoteSigner[AccountType any] interface {

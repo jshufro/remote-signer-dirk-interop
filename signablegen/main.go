@@ -240,7 +240,7 @@ func emitGo(pkgname string, schemaNames []string, discriminatorsToTypes map[stri
 	write("\t\"context\"\n")
 	write("\t\"fmt\"\n")
 	write("\n")
-	write("\t\"github.com/jshufro/remote-signer-dirk-interop/internal/errors\"\n")
+	write("\t\"github.com/jshufro/remote-signer-dirk-interop/pkg/errors\"\n")
 	write("\n")
 	for _, importItem := range customImports {
 		write(importItem)
