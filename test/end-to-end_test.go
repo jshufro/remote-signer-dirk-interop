@@ -18,7 +18,7 @@ import (
 
 	"github.com/attestantio/dirk/testing/logger"
 	"github.com/herumi/bls-eth-go-binary/bls"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
+	api "github.com/jshufro/remote-signer-dirk-interop/generated"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/service"
 	tlstest "github.com/jshufro/remote-signer-dirk-interop/pkg/tls/test"

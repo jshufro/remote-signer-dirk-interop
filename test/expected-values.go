@@ -10,7 +10,7 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
+	api "github.com/jshufro/remote-signer-dirk-interop/generated"
 	"github.com/jshufro/remote-signer-dirk-interop/test/dirkdaemon/proc/distributedwallet"
 )
 

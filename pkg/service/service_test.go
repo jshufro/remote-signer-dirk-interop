@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jshufro/remote-signer-dirk-interop/internal/api"
-	"github.com/jshufro/remote-signer-dirk-interop/internal/errors"
+	api "github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/errors"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 )
 
