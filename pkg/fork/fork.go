@@ -19,7 +19,7 @@ type Fork struct {
 }
 
 type ForkInfo struct {
-	Fork                  *Fork
+	Fork                  Fork
 	GenesisValidatorsRoot []byte
 }
 
@@ -54,7 +54,7 @@ func (f *ForkInfo) UnmarshalJSON(data []byte) error {
 		return errors.New("previous_version is not 4 bytes")
 	}
 
-	f.Fork = &Fork{
+	f.Fork = Fork{
 		CurrentVersion:  currentVersion,
 		PreviousVersion: previousVersion,
 		Epoch:           e,

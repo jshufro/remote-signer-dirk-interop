@@ -106,7 +106,7 @@ func (d *DirkSigner) GetAccountForPubkey(ctx context.Context, pubkey [48]byte) (
 	if ok {
 		aps, ok := account.(e2wt.AccountProtectingSigner)
 		if !ok {
-			d.log.Warn("account is not a protecting signer", "pubkey", hex.EncodeToString(pubkey[:]))
+			d.log.Error("account is not a protecting signer", "pubkey", hex.EncodeToString(pubkey[:]))
 			return nil, errors.BadRequest("account is not a protecting signer")
 		}
 		return aps, nil
@@ -122,7 +122,7 @@ func (d *DirkSigner) calculateDomain(
 ) ([]byte, error) {
 	out, err := forkInfo.ComputeDomain(domainType, epoch)
 	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
+		d.log.Error("failed to compute domain", "error", err)
 		return nil, errors.InternalServerError()
 	}
 	d.log.Debug("computed domain", "domain", fmt.Sprintf("%#x", out))

@@ -2,7 +2,9 @@ package dirksigner
 
 import (
 	"bytes"
+	"encoding/json"
 	"log/slog"
+	"strings"
 	"testing"
 
 	e2t "github.com/wealdtech/go-eth2-types/v2"
@@ -103,7 +105,7 @@ func TestCalculateDomainError(t *testing.T) {
 		t.Fatalf("failed to decode genesis validators root: %v", err)
 	}
 	_, err = dirk.calculateDomain(domains.DomainAggregateAndProof, &fork.ForkInfo{
-		Fork: &fork.Fork{
+		Fork: fork.Fork{
 			CurrentVersion:  []byte{0x00, 0x00, 0x00, 0x00},
 			PreviousVersion: []byte{0x00, 0x00, 0x00, 0x00},
 			Epoch:           100,
@@ -136,6 +138,37 @@ func TestAggregationSlotSigning(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
 	}
+}
 
-	// Invalid
+func TestAggregateAndProofSigningV2(t *testing.T) {
+	dirk := NewDirkSigner(
+		[]byte{0x00, 0x00, 0x00, 0x00},
+		[]*e2wd.Endpoint{},
+		"Wallet 1",
+		nil,
+		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
+		nil,
+	)
+
+	jsonMsg := `{
+		"type": "AGGREGATE_AND_PROOF_V2",
+		"aggregate_and_proof": {
+			"version": "invalid"
+		}
+	}`
+
+	obj := &api.AggregateAndProofSigningV2{}
+	err := json.Unmarshal([]byte(jsonMsg), obj)
+	if err != nil {
+		t.Fatalf("failed to unmarshal json: %v", err)
+	}
+
+	// invalid discriminator should return a BadRequest error
+	_, err = dirk.AggregateAndProofSigningV2(t.Context(), nil, obj, nil)
+	if err == nil {
+		t.Fatalf("expected error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown aggregate and proof type") {
+		t.Fatalf("expected error `unknown aggregate and proof type`, got `%v`", err)
+	}
 }

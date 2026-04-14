@@ -8,7 +8,7 @@ import (
 
 func TestForkInfoRoundTrip(t *testing.T) {
 	forkInfo := &ForkInfo{
-		Fork: &Fork{
+		Fork: Fork{
 			CurrentVersion:  []byte{0x00, 0x00, 0x00, 0x20},
 			PreviousVersion: []byte{0x00, 0x00, 0x00, 0x10},
 			Epoch:           100,

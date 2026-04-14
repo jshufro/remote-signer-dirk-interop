@@ -132,6 +132,90 @@ func TestSIGN_Success(t *testing.T) {
 	}
 }
 
+func TestSIGN_MissingForkInfo(t *testing.T) {
+	fs := &fakeSigner{}
+	svc, err := NewService(fs)
+	if err != nil {
+		t.Fatalf("NewService error: %v", err)
+	}
+	svc.SetTimeout(1 * time.Second)
+
+	pubkey := [48]byte{}
+	for i := range pubkey {
+		pubkey[i] = byte(i)
+	}
+	identifier := "0x" + hex.EncodeToString(pubkey[:])
+
+	body := map[string]any{
+		"type": "AGGREGATION_SLOT",
+		"aggregation_slot": map[string]any{
+			"slot": "123",
+		},
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eth2/sign/"+identifier, bytes.NewReader(raw))
+	w := httptest.NewRecorder()
+
+	svc.SIGN(w, req, identifier)
+	res := w.Result()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", res.StatusCode)
+	}
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	respStr := string(bodyBytes)
+	if !strings.Contains(respStr, "fork_info is required") {
+		t.Fatalf("expected 'fork_info is required', got %s", respStr)
+	}
+}
+
+func TestSIGN_UnmarshalSignableError(t *testing.T) {
+	fs := &fakeSigner{}
+	svc, err := NewService(fs)
+	if err != nil {
+		t.Fatalf("NewService error: %v", err)
+	}
+	svc.SetTimeout(1 * time.Second)
+
+	pubkey := [48]byte{}
+	for i := range pubkey {
+		pubkey[i] = byte(i)
+	}
+	identifier := "0x" + hex.EncodeToString(pubkey[:])
+
+	body := map[string]any{
+		"type":             "AGGREGATION_SLOT",
+		"aggregation_slot": "this should be an object, but it's a string",
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eth2/sign/"+identifier, bytes.NewReader(raw))
+	w := httptest.NewRecorder()
+
+	svc.SIGN(w, req, identifier)
+	res := w.Result()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", res.StatusCode)
+	}
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	respStr := string(bodyBytes)
+	if !strings.Contains(respStr, "failed to unmarshal request body") {
+		t.Fatalf("expected 'failed to unmarshal request body', got %s", respStr)
+	}
+}
+
 func TestSIGN_Error(t *testing.T) {
 	fs := &fakeSigner{shouldError: true}
 	svc, err := NewService(fs)
@@ -147,6 +231,14 @@ func TestSIGN_Error(t *testing.T) {
 	identifier := "0x" + hex.EncodeToString(pubkey[:])
 
 	body := map[string]any{
+		"fork_info": map[string]any{
+			"fork": map[string]any{
+				"previous_version": "0x00000000",
+				"current_version":  "0x00000000",
+				"epoch":            "0",
+			},
+			"genesis_validators_root": "0x" + hex.EncodeToString(make([]byte, 32)),
+		},
 		"type": "AGGREGATION_SLOT",
 		"aggregation_slot": map[string]any{
 			"slot": "123",
