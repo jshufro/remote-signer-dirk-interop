@@ -17,7 +17,7 @@ var sha256Pool = sync.Pool{
 	},
 }
 
-func ComputeDomain(domainType DomainType, forkVersion [4]byte, genesisValidatorsRoot [32]byte) Domain {
+func ComputeDomain(domainType DomainType, forkVersion ForkVersion, genesisValidatorsRoot Root) Domain {
 
 	buf := [32]byte{}
 	copy(buf[:4], forkVersion[:])
