@@ -1,42 +1,53 @@
 package domains
 
 import (
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"crypto/sha256"
+	"hash"
+	"sync"
 )
 
 type DomainType [4]byte
+type Domain [32]byte
+type ForkVersion [4]byte
+type Root [32]byte
 
-type DomainProvider interface {
-	ComputeDomain() ([]byte, error)
+var sha256Pool = sync.Pool{
+	New: func() any {
+		return sha256.New()
+	},
 }
 
-var _ DomainProvider = (*staticDomainProvider)(nil)
+func ComputeDomain(domainType DomainType, forkVersion [4]byte, genesisValidatorsRoot [32]byte) Domain {
 
-type staticDomainProvider struct {
-	domainType         DomainType
-	genesisForkVersion []byte
+	buf := [32]byte{}
+	copy(buf[:4], forkVersion[:])
+
+	// sha256(paddedForkVersion || genesisValidatorsRoot)
+	hash := sha256Pool.Get().(hash.Hash)
+	defer sha256Pool.Put(hash)
+	hash.Write(buf[:])
+	hash.Write(genesisValidatorsRoot[:])
+	copy(buf[0:4], domainType[:])
+	copy(buf[4:], hash.Sum(nil))
+	defer hash.Reset()
+
+	return buf
 }
 
-func (d *staticDomainProvider) ComputeDomain() ([]byte, error) {
-	return signing.ComputeDomain(
-		d.domainType,
-		d.genesisForkVersion,
-		nil,
+func DepositDomain(genesisForkVersion ForkVersion) Domain {
+	return ComputeDomain(
+		DomainDeposit,
+		genesisForkVersion,
+		Root{},
 	)
 }
 
-func DepositDomainProvider(genesisForkVersion []byte) *staticDomainProvider {
-	return &staticDomainProvider{
-		domainType:         DomainDeposit,
-		genesisForkVersion: genesisForkVersion,
-	}
-}
-
-func ValidatorRegistrationDomainProvider(genesisForkVersion []byte) *staticDomainProvider {
-	return &staticDomainProvider{
-		domainType:         DomainApplicationBuilder,
-		genesisForkVersion: genesisForkVersion,
-	}
+func ValidatorRegistrationDomain(genesisForkVersion ForkVersion) Domain {
+	return ComputeDomain(
+		DomainApplicationBuilder,
+		genesisForkVersion,
+		Root{},
+	)
 }
 
 var (

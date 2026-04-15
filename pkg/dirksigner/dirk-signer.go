@@ -129,13 +129,9 @@ func (d *DirkSigner) sign(
 	ctx context.Context,
 	account e2wt.AccountProtectingSigner,
 	htr [32]byte,
-	domainProvider domains.DomainProvider,
+	domain domains.Domain,
 ) ([96]byte, error) {
-	domain, err := domainProvider.ComputeDomain()
-	if err != nil {
-		return d.returnUnexpectedFailure("failed to compute domain", err)
-	}
-	signature, err := account.SignGeneric(ctx, htr[:], domain)
+	signature, err := account.SignGeneric(ctx, htr[:], domain[:])
 	if err != nil {
 		return d.returnUnexpectedFailure("failed to sign generic", err)
 	}
@@ -147,14 +143,14 @@ func (d *DirkSigner) signHashRoot(
 	ctx context.Context,
 	account e2wt.AccountProtectingSigner,
 	htr ssz.HashRoot,
-	domainProvider domains.DomainProvider,
+	domain domains.Domain,
 ) ([96]byte, error) {
 	htrResult, err := htr.HashTreeRoot()
 	if err != nil {
 		return d.returnUnexpectedFailure("failed to compute hash tree root", err)
 	}
 
-	return d.sign(ctx, account, htrResult, domainProvider)
+	return d.sign(ctx, account, htrResult, domain)
 }
 
 func (d *DirkSigner) returnUnexpectedFailure(msg string, err error) ([96]byte, error) {
@@ -179,9 +175,9 @@ func (d *DirkSigner) AggregationSlotSigning(
 
 	epoch := slot / 32
 
-	domainProvider := forkInfo.WithDomainType(domains.DomainSelectionProof).DomainProvider(epoch)
+	domain := forkInfo.WithDomainType(domains.DomainSelectionProof).Domain(epoch)
 
-	return d.sign(ctx, account, hashTreeRoot, domainProvider)
+	return d.sign(ctx, account, hashTreeRoot, domain)
 }
 
 func (d *DirkSigner) AggregateAndProofSigningV2(
@@ -219,9 +215,9 @@ func (d *DirkSigner) AggregateAndProofSigningV2(
 		return [96]byte{}, errors.BadRequest("unknown aggregate and proof type: %s", discriminator)
 	}
 
-	domainProvider := forkInfo.WithDomainType(domains.DomainAggregateAndProof).DomainProvider(epoch)
+	domain := forkInfo.WithDomainType(domains.DomainAggregateAndProof).Domain(epoch)
 
-	return d.signHashRoot(ctx, account, htr, domainProvider)
+	return d.signHashRoot(ctx, account, htr, domain)
 }
 
 func (d *DirkSigner) AttestationSigning(
@@ -232,12 +228,7 @@ func (d *DirkSigner) AttestationSigning(
 ) ([96]byte, error) {
 	attestation := obj.Attestation
 	epoch := uint64(attestation.Slot / 32)
-	domainProvider := forkInfo.WithDomainType(domains.DomainBeaconAttester).DomainProvider(epoch)
-	domain, err := domainProvider.ComputeDomain()
-	if err != nil {
-		return d.returnUnexpectedFailure("failed to compute domain", err)
-	}
-
+	domain := forkInfo.WithDomainType(domains.DomainBeaconAttester).Domain(epoch)
 	signature, err := account.SignBeaconAttestation(
 		ctx,
 		uint64(attestation.Slot),
@@ -342,11 +333,7 @@ func (d *DirkSigner) BeaconBlockSigning(
 	}
 
 	epoch := uint64(header.Slot / 32)
-	domainProvider := forkInfo.WithDomainType(domains.DomainBeaconProposer).DomainProvider(epoch)
-	domain, err := domainProvider.ComputeDomain()
-	if err != nil {
-		return d.returnUnexpectedFailure("failed to compute domain", err)
-	}
+	domain := forkInfo.WithDomainType(domains.DomainBeaconProposer).Domain(epoch)
 	signature, err := account.SignBeaconProposal(
 		ctx,
 		uint64(header.Slot),
@@ -389,9 +376,9 @@ func (d *DirkSigner) DepositSigning(
 		return [96]byte{}, errors.BadRequest("failed to unmarshal deposit: %w", err)
 	}
 
-	domainProvider := domains.DepositDomainProvider(genesisForkVersion)
+	domain := domains.DepositDomain(domains.ForkVersion(genesisForkVersion))
 
-	return d.signHashRoot(ctx, account, deposit, domainProvider)
+	return d.signHashRoot(ctx, account, deposit, domain)
 }
 
 func (d *DirkSigner) RandaoRevealSigning(
@@ -408,9 +395,9 @@ func (d *DirkSigner) RandaoRevealSigning(
 	}
 
 	hashTreeRoot := typeconv.Uint64ToHashTreeRoot(epoch)
-	domainProvider := forkInfo.WithDomainType(domains.DomainRandao).DomainProvider(epoch)
+	domain := forkInfo.WithDomainType(domains.DomainRandao).Domain(epoch)
 
-	return d.sign(ctx, account, hashTreeRoot, domainProvider)
+	return d.sign(ctx, account, hashTreeRoot, domain)
 }
 
 func (d *DirkSigner) VoluntaryExitSigning(
@@ -420,9 +407,9 @@ func (d *DirkSigner) VoluntaryExitSigning(
 	forkInfo *fork.ForkInfo,
 ) ([96]byte, error) {
 	epoch := uint64(obj.VoluntaryExit.Epoch)
-	domainProvider := forkInfo.WithDomainType(domains.DomainVoluntaryExit).DomainProvider(epoch)
+	domain := forkInfo.WithDomainType(domains.DomainVoluntaryExit).Domain(epoch)
 
-	return d.signHashRoot(ctx, account, &obj.VoluntaryExit, domainProvider)
+	return d.signHashRoot(ctx, account, &obj.VoluntaryExit, domain)
 }
 
 func (d *DirkSigner) SyncCommitteeMessageSigning(
@@ -449,9 +436,9 @@ func (d *DirkSigner) SyncCommitteeMessageSigning(
 
 	epoch := slot / 32
 
-	domainProvider := forkInfo.WithDomainType(domains.DomainSyncCommittee).DomainProvider(epoch)
+	domain := forkInfo.WithDomainType(domains.DomainSyncCommittee).Domain(epoch)
 
-	return d.sign(ctx, account, htr, domainProvider)
+	return d.sign(ctx, account, htr, domain)
 }
 
 func (d *DirkSigner) SyncCommitteeSelectionProofSigning(
@@ -461,9 +448,9 @@ func (d *DirkSigner) SyncCommitteeSelectionProofSigning(
 	forkInfo *fork.ForkInfo,
 ) ([96]byte, error) {
 	epoch := uint64(obj.SyncAggregatorSelectionData.Slot / 32)
-	domainProvider := forkInfo.WithDomainType(domains.DomainSyncCommiteeSelectionProof).DomainProvider(epoch)
+	domain := forkInfo.WithDomainType(domains.DomainSyncCommiteeSelectionProof).Domain(epoch)
 
-	return d.signHashRoot(ctx, account, &obj.SyncAggregatorSelectionData, domainProvider)
+	return d.signHashRoot(ctx, account, &obj.SyncAggregatorSelectionData, domain)
 }
 
 func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(
@@ -473,9 +460,9 @@ func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(
 	forkInfo *fork.ForkInfo,
 ) ([96]byte, error) {
 	epoch := uint64(obj.ContributionAndProof.Contribution.Slot / 32)
-	domainProvider := forkInfo.WithDomainType(domains.DomainSyncContributionAndProof).DomainProvider(epoch)
+	domain := forkInfo.WithDomainType(domains.DomainSyncContributionAndProof).Domain(epoch)
 
-	return d.signHashRoot(ctx, account, &obj.ContributionAndProof, domainProvider)
+	return d.signHashRoot(ctx, account, &obj.ContributionAndProof, domain)
 }
 
 func (d *DirkSigner) ValidatorRegistrationSigning(
@@ -483,7 +470,7 @@ func (d *DirkSigner) ValidatorRegistrationSigning(
 	account e2wt.AccountProtectingSigner,
 	obj *api.ValidatorRegistrationSigning,
 ) ([96]byte, error) {
-	domainProvider := domains.ValidatorRegistrationDomainProvider(d.genesisForkVersion)
+	domain := domains.ValidatorRegistrationDomain(domains.ForkVersion(d.genesisForkVersion))
 
-	return d.signHashRoot(ctx, account, &obj.ValidatorRegistration, domainProvider)
+	return d.signHashRoot(ctx, account, &obj.ValidatorRegistration, domain)
 }

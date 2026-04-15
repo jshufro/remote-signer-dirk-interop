@@ -95,36 +95,6 @@ func TestEmptyEndpointsError(t *testing.T) {
 	}
 }
 
-type erroringDomainProvider struct{}
-
-var _ domains.DomainProvider = (*erroringDomainProvider)(nil)
-
-func (e *erroringDomainProvider) ComputeDomain() ([]byte, error) {
-	return nil, errors.InternalServerError()
-}
-
-func TestErroringDomainProvider(t *testing.T) {
-	logBuf := bytes.Buffer{}
-	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
-	)
-	_, err := dirk.sign(t.Context(), nil, [32]byte{}, &erroringDomainProvider{})
-	if err == nil {
-		t.Fatalf("expected error, got %v", err)
-	}
-	if !strings.Contains(err.Error(), "internal_server_error") {
-		t.Fatalf("expected error `internal_server_error`, got `%v`", err)
-	}
-	if !strings.Contains(logBuf.String(), "failed to compute domain") {
-		t.Fatalf("expected log to contain `failed to compute domain`, got `%v`", logBuf.String())
-	}
-}
-
 var _ dirk.DirkSigner = (*fakeDirk)(nil)
 
 type fakeDirk struct {
@@ -202,7 +172,7 @@ func TestErroringHashRoot(t *testing.T) {
 		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
 		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
 	)
-	_, err := dirk.signHashRoot(t.Context(), nil, &erroringHashRoot{shouldError: true}, validForkInfo.WithDomainType(domains.DomainSelectionProof).DomainProvider(0))
+	_, err := dirk.signHashRoot(t.Context(), nil, &erroringHashRoot{shouldError: true}, validForkInfo.WithDomainType(domains.DomainSelectionProof).Domain(0))
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
 	}
@@ -232,7 +202,7 @@ func TestSignGenericError(t *testing.T) {
 	)
 	fakeAccount := fakeDirkAccount{shouldError: true}
 	dirk.dirk = &fakeDirk{accounts: []fakeDirkAccount{fakeAccount}}
-	_, err := dirk.sign(t.Context(), &fakeAccount, [32]byte{}, validForkInfo.WithDomainType(domains.DomainSelectionProof).DomainProvider(0))
+	_, err := dirk.sign(t.Context(), &fakeAccount, [32]byte{}, validForkInfo.WithDomainType(domains.DomainSelectionProof).Domain(0))
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
 	}
