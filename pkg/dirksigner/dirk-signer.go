@@ -132,8 +132,7 @@ func (d *DirkSigner) calculateDomain(
 func (d *DirkSigner) returnSignature(signature e2t.Signature) ([96]byte, error) {
 	b := signature.Marshal()
 	if len(b) != 96 {
-		d.log.Warn("produced signature is not 96 bytes", "signature", hex.EncodeToString(b))
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("produced signature is not 96 bytes", fmt.Errorf("signature is %d bytes", len(b)))
 	}
 	return [96]byte(b), nil
 }
@@ -156,6 +155,11 @@ func (d *DirkSigner) sign(ctx context.Context, account e2wt.AccountProtectingSig
 	return d.returnSignGeneric(ctx, account, htr, domain)
 }
 
+func (d *DirkSigner) returnUnexpectedFailure(msg string, err error) ([96]byte, error) {
+	d.log.Warn(msg, "error", err)
+	return [96]byte{}, errors.InternalServerError()
+}
+
 func (d *DirkSigner) AggregationSlotSigning(
 	ctx context.Context,
 	account e2wt.AccountProtectingSigner,
@@ -173,8 +177,7 @@ func (d *DirkSigner) AggregationSlotSigning(
 	hasher.FillUpTo32()
 	hashTreeRoot, err := hasher.HashRoot()
 	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute hash tree root", err)
 	}
 
 	epoch := slot / 32
@@ -219,8 +222,7 @@ func (d *DirkSigner) AggregateAndProofSigningV2(
 
 	hashTreeRoot, err := htr()
 	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute hash tree root", err)
 	}
 
 	return d.sign(ctx, account, hashTreeRoot, domains.DomainAggregateAndProof, forkInfo, epoch)
@@ -240,8 +242,7 @@ func (d *DirkSigner) AttestationSigning(
 		epoch,
 	)
 	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute domain", err)
 	}
 
 	signature, err := account.SignBeaconAttestation(
@@ -256,8 +257,7 @@ func (d *DirkSigner) AttestationSigning(
 		domain[:],
 	)
 	if err != nil {
-		d.log.Warn("failed to sign beacon attestation", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to sign beacon attestation", err)
 	}
 	return d.returnSignature(signature)
 }
@@ -354,8 +354,7 @@ func (d *DirkSigner) BeaconBlockSigning(
 		epoch,
 	)
 	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute domain", err)
 	}
 	signature, err := account.SignBeaconProposal(
 		ctx,
@@ -367,8 +366,7 @@ func (d *DirkSigner) BeaconBlockSigning(
 		domain[:],
 	)
 	if err != nil {
-		d.log.Warn("failed to sign beacon proposal", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to sign beacon proposal", err)
 	}
 	return d.returnSignature(signature)
 }
@@ -412,8 +410,7 @@ func (d *DirkSigner) DepositSigning(
 		nil, /* genesis validators root */
 	)
 	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute domain", err)
 	}
 
 	return d.returnSignGeneric(ctx, account, hashTreeRoot, domain)
@@ -436,8 +433,7 @@ func (d *DirkSigner) RandaoRevealSigning(
 	hasher.FillUpTo32()
 	hashTreeRoot, err := hasher.HashRoot()
 	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute hash tree root", err)
 	}
 
 	return d.sign(ctx, account, hashTreeRoot, domains.DomainRandao, forkInfo, epoch)
@@ -451,8 +447,7 @@ func (d *DirkSigner) VoluntaryExitSigning(
 ) ([96]byte, error) {
 	hashTreeRoot, err := obj.VoluntaryExit.HashTreeRoot()
 	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute hash tree root", err)
 	}
 
 	epoch := uint64(obj.VoluntaryExit.Epoch)
@@ -495,8 +490,7 @@ func (d *DirkSigner) SyncCommitteeSelectionProofSigning(
 ) ([96]byte, error) {
 	hashTreeRoot, err := obj.SyncAggregatorSelectionData.HashTreeRoot()
 	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute hash tree root", err)
 	}
 
 	epoch := uint64(obj.SyncAggregatorSelectionData.Slot / 32)
@@ -512,8 +506,7 @@ func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(
 ) ([96]byte, error) {
 	hashTreeRoot, err := obj.ContributionAndProof.HashTreeRoot()
 	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute hash tree root", err)
 	}
 
 	epoch := uint64(obj.ContributionAndProof.Contribution.Slot / 32)
@@ -529,8 +522,7 @@ func (d *DirkSigner) ValidatorRegistrationSigning(
 
 	hashTreeRoot, err := obj.ValidatorRegistration.HashTreeRoot()
 	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute hash tree root", err)
 	}
 
 	// Compute the domain
@@ -542,8 +534,7 @@ func (d *DirkSigner) ValidatorRegistrationSigning(
 		nil, /* genesis validators root */
 	)
 	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute domain", err)
 	}
 
 	return d.returnSignGeneric(ctx, account, hashTreeRoot, domain)
