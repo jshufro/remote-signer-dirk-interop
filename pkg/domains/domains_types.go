@@ -1,6 +1,43 @@
 package domains
 
+import (
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+)
+
 type DomainType [4]byte
+
+type DomainProvider interface {
+	ComputeDomain() ([]byte, error)
+}
+
+var _ DomainProvider = (*staticDomainProvider)(nil)
+
+type staticDomainProvider struct {
+	domainType         DomainType
+	genesisForkVersion []byte
+}
+
+func (d *staticDomainProvider) ComputeDomain() ([]byte, error) {
+	return signing.ComputeDomain(
+		d.domainType,
+		d.genesisForkVersion,
+		nil,
+	)
+}
+
+func DepositDomainProvider(genesisForkVersion []byte) *staticDomainProvider {
+	return &staticDomainProvider{
+		domainType:         DomainDeposit,
+		genesisForkVersion: genesisForkVersion,
+	}
+}
+
+func ValidatorRegistrationDomainProvider(genesisForkVersion []byte) *staticDomainProvider {
+	return &staticDomainProvider{
+		domainType:         DomainApplicationBuilder,
+		genesisForkVersion: genesisForkVersion,
+	}
+}
 
 var (
 	// phase0

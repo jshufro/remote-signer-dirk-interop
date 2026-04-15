@@ -1,8 +1,8 @@
-package: generated 
+package: api 
 generate:
   models: true
   std-http-server: true
-output: generated/remote_signing.gen.go
+output: generated/api/remote_signing.gen.go
 import-mapping:
   ../schemas.yaml: "-" 
 output-options:

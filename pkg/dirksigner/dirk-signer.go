@@ -10,17 +10,18 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
-	"github.com/herumi/bls-eth-go-binary/bls"
-	api "github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/generated/api"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner/dirk"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/errors"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/fork"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/typeconv"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/herumi/bls-eth-go-binary/bls"
 	e2t "github.com/wealdtech/go-eth2-types/v2"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
 	e2wt "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -79,6 +80,7 @@ func (d *DirkSigner) Open(ctx context.Context, logLevel slog.Level) error {
 
 	// Prime the account pubkey map
 	_ = d.getPublicKeys(ctx)
+
 	return nil
 }
 
@@ -91,6 +93,7 @@ func (d *DirkSigner) getPublicKeys(ctx context.Context) [][48]byte {
 		out = append(out, pubkeyBytes)
 		d.accounts.Store(pubkeyBytes, account)
 	}
+
 	return out
 }
 
@@ -104,8 +107,8 @@ func (d *DirkSigner) GetAccountForPubkey(ctx context.Context, pubkey [48]byte) (
 	if ok {
 		aps, ok := account.(e2wt.AccountProtectingSigner)
 		if !ok {
-			d.log.Warn("account is not a protecting signer", "pubkey", hex.EncodeToString(pubkey[:]))
-			return nil, errors.BadRequest("account is not a protecting signer")
+			d.log.Error("account is not a protecting signer", "pubkey", hex.EncodeToString(pubkey[:]))
+			return nil, errors.InternalServerError()
 		}
 		return aps, nil
 	}
@@ -113,125 +116,126 @@ func (d *DirkSigner) GetAccountForPubkey(ctx context.Context, pubkey [48]byte) (
 	return nil, errors.PublicKeyNotFound("account not found for pubkey: %s", hex.EncodeToString(pubkey[:]))
 }
 
-func (d *DirkSigner) returnSignature(signature e2t.Signature) ([96]byte, error) {
-	b := signature.Marshal()
-	if len(b) != 96 {
-		d.log.Warn("produced signature is not 96 bytes", "signature", hex.EncodeToString(b))
-		return [96]byte{}, errors.InternalServerError()
+func (d *DirkSigner) signature(signature e2t.Signature) ([96]byte, error) {
+	b, err := typeconv.SignatureToBytes(signature)
+	if err != nil {
+		return d.returnUnexpectedFailure("produced invalid signature", err)
 	}
-	return [96]byte(b), nil
+
+	return b, nil
 }
 
-func (d *DirkSigner) AggregationSlotSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.AggregationSlotSigning) ([96]byte, error) {
+func (d *DirkSigner) sign(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	htr [32]byte,
+	domainProvider domains.DomainProvider,
+) ([96]byte, error) {
+	domain, err := domainProvider.ComputeDomain()
+	if err != nil {
+		return d.returnUnexpectedFailure("failed to compute domain", err)
+	}
+	signature, err := account.SignGeneric(ctx, htr[:], domain)
+	if err != nil {
+		return d.returnUnexpectedFailure("failed to sign generic", err)
+	}
+
+	return d.signature(signature)
+}
+
+func (d *DirkSigner) signHashRoot(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	htr ssz.HashRoot,
+	domainProvider domains.DomainProvider,
+) ([96]byte, error) {
+	htrResult, err := htr.HashTreeRoot()
+	if err != nil {
+		return d.returnUnexpectedFailure("failed to compute hash tree root", err)
+	}
+
+	return d.sign(ctx, account, htrResult, domainProvider)
+}
+
+func (d *DirkSigner) returnUnexpectedFailure(msg string, err error) ([96]byte, error) {
+	d.log.Warn(msg, "error", err)
+	return [96]byte{}, errors.InternalServerError()
+}
+
+func (d *DirkSigner) AggregationSlotSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.AggregationSlotSigning,
+	forkInfo *fork.ForkInfo,
+) ([96]byte, error) {
 
 	slotStr := obj.AggregationSlot.Slot
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
 	if err != nil {
 		return [96]byte{}, errors.BadRequest("failed to parse slot: %w", err)
 	}
-	hasher := ssz.NewHasher()
-	hasher.AppendUint64(slot)
-	hasher.FillUpTo32()
-	hashTreeRoot, err := hasher.HashRoot()
-	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
+	// Simply right-pad the slot to 32 bytes
+	hashTreeRoot := typeconv.Uint64ToHashTreeRoot(slot)
 
 	epoch := slot / 32
 
-	// Compute the domain
-	domain, err := d.calculateDomain(
-		domains.DomainSelectionProof,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		epoch,
-		&obj.ForkInfo.Fork,
-	)
-	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
+	domainProvider := forkInfo.WithDomainType(domains.DomainSelectionProof).DomainProvider(epoch)
 
-	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if err != nil {
-		d.log.Warn("failed to sign randao reveal", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-	d.log.Debug("signed aggregation slot")
-	return d.returnSignature(signature)
+	return d.sign(ctx, account, hashTreeRoot, domainProvider)
 }
 
-func (d *DirkSigner) AggregateAndProofSigningV2(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.AggregateAndProofSigningV2) ([96]byte, error) {
+func (d *DirkSigner) AggregateAndProofSigningV2(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.AggregateAndProofSigningV2,
+	forkInfo *fork.ForkInfo,
+) ([96]byte, error) {
 	aggregateAndProof := obj.AggregateAndProof
 	discriminator, err := aggregateAndProof.Discriminator()
 	if err != nil {
 		d.log.Warn("failed to get discriminator", "error", err)
-		return [96]byte{}, errors.BadRequest("failed to get 'type': %w", err)
+		return [96]byte{}, errors.BadRequest("failed to get discriminator: %w", err)
 	}
 
-	var hashTreeRoot [32]byte
+	var htr ssz.HashRoot
 	var epoch uint64
 	switch discriminator {
 	case "PHASE0", "ALTAIR", "BELLATRIX", "CAPELLA", "DENEB":
 		phase0AggregateAndProof, err := aggregateAndProof.AsAggregateAndProofRequestPhase0()
-		epoch = uint64(phase0AggregateAndProof.Data.Aggregate.Data.Slot / 32)
 		if err != nil {
 			return [96]byte{}, errors.BadRequest("failed to get phase0 aggregate and proof: %w", err)
 		}
-		hashTreeRoot, err = phase0AggregateAndProof.Data.HashTreeRoot()
-		if err != nil {
-			d.log.Warn("failed to compute hash tree root", "error", err)
-			return [96]byte{}, errors.InternalServerError()
-		}
+		epoch = uint64(phase0AggregateAndProof.Data.Aggregate.Data.Slot / 32)
+		htr = &phase0AggregateAndProof.Data
 	case "ELECTRA", "FULU":
 		electraAggregateAndProof, err := aggregateAndProof.AsAggregateAndProofRequestElectra()
-		epoch = uint64(electraAggregateAndProof.Data.Aggregate.Data.Slot / 32)
 		if err != nil {
-			d.log.Warn("failed to get electra aggregate and proof", "error", err)
 			return [96]byte{}, errors.BadRequest("failed to get electra aggregate and proof: %w", err)
 		}
-		hashTreeRoot, err = electraAggregateAndProof.Data.HashTreeRoot()
-		if err != nil {
-			d.log.Warn("failed to compute hash tree root", "error", err)
-			return [96]byte{}, errors.InternalServerError()
-		}
+		epoch = uint64(electraAggregateAndProof.Data.Aggregate.Data.Slot / 32)
+		htr = &electraAggregateAndProof.Data
 	default:
 		d.log.Warn("unknown aggregate and proof type", "discriminator", discriminator)
 		return [96]byte{}, errors.BadRequest("unknown aggregate and proof type: %s", discriminator)
 	}
 
-	domain, err := d.calculateDomain(
-		domains.DomainAggregateAndProof,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		epoch,
-		&obj.ForkInfo.Fork,
-	)
-	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
+	domainProvider := forkInfo.WithDomainType(domains.DomainAggregateAndProof).DomainProvider(epoch)
 
-	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if err != nil {
-		d.log.Warn("failed to sign aggregate and proof", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-	d.log.Debug("signed aggregate and proof")
-	return d.returnSignature(signature)
+	return d.signHashRoot(ctx, account, htr, domainProvider)
 }
 
-func (d *DirkSigner) AttestationSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.AttestationSigning) ([96]byte, error) {
+func (d *DirkSigner) AttestationSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.AttestationSigning,
+	forkInfo *fork.ForkInfo,
+) ([96]byte, error) {
 	attestation := obj.Attestation
 	epoch := uint64(attestation.Slot / 32)
-	domain, err := d.calculateDomain(
-		domains.DomainBeaconAttester,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		epoch,
-		&obj.ForkInfo.Fork,
-	)
+	domainProvider := forkInfo.WithDomainType(domains.DomainBeaconAttester).DomainProvider(epoch)
+	domain, err := domainProvider.ComputeDomain()
 	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute domain", err)
 	}
 
 	signature, err := account.SignBeaconAttestation(
@@ -246,14 +250,18 @@ func (d *DirkSigner) AttestationSigning(ctx context.Context, account e2wt.Accoun
 		domain[:],
 	)
 	if err != nil {
-		d.log.Warn("failed to sign beacon attestation", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to sign beacon attestation", err)
 	}
-	d.log.Debug("signed beacon attestation")
-	return d.returnSignature(signature)
+
+	return d.signature(signature)
 }
 
-func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.BeaconBlockSigning) ([96]byte, error) {
+func (d *DirkSigner) BeaconBlockSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.BeaconBlockSigning,
+	forkInfo *fork.ForkInfo,
+) ([96]byte, error) {
 	block := obj.BeaconBlock
 	discriminator, err := block.Discriminator()
 	if err != nil {
@@ -261,11 +269,11 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, account e2wt.Accoun
 	}
 
 	var header api.BeaconBlockHeader
+
 	switch discriminator {
 	case "PHASE0":
 		phase0Block, err := block.AsBlockRequestPhase0()
 		if err != nil {
-			d.log.Warn("failed to get phase0 block", "error", err)
 			return [96]byte{}, errors.BadRequest("failed to get phase0 block: %w", err)
 		}
 		bodyRoot, err := phase0Block.Block.Body.HashTreeRoot()
@@ -273,32 +281,13 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, account e2wt.Accoun
 			return [96]byte{}, errors.BadRequest("failed to get body root: %w", err)
 		}
 
-		epoch := phase0Block.Block.Slot / 32
-		domain, err := d.calculateDomain(
-			domains.DomainBeaconProposer,
-			obj.ForkInfo.GenesisValidatorsRoot,
-			uint64(epoch),
-			&obj.ForkInfo.Fork,
-		)
-		if err != nil {
-			d.log.Warn("failed to compute domain", "error", err)
-			return [96]byte{}, errors.InternalServerError()
+		header = api.BeaconBlockHeader{
+			Slot:          phase0Block.Block.Slot,
+			ProposerIndex: phase0Block.Block.ProposerIndex,
+			ParentRoot:    phase0Block.Block.ParentRoot,
+			StateRoot:     phase0Block.Block.StateRoot,
+			BodyRoot:      bodyRoot,
 		}
-		signature, err := account.SignBeaconProposal(
-			ctx,
-			uint64(phase0Block.Block.Slot),
-			uint64(phase0Block.Block.ProposerIndex),
-			phase0Block.Block.ParentRoot[:],
-			phase0Block.Block.StateRoot[:],
-			bodyRoot[:],
-			domain[:],
-		)
-		if err != nil {
-			d.log.Warn("failed to sign beacon proposal", "error", err)
-			return [96]byte{}, errors.InternalServerError()
-		}
-		d.log.Debug("signed beacon proposal")
-		return d.returnSignature(signature)
 	case "ALTAIR":
 		altairBlock, err := block.AsBlockRequestAltair()
 		if err != nil {
@@ -309,38 +298,20 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, account e2wt.Accoun
 			return [96]byte{}, errors.BadRequest("failed to get body root: %w", err)
 		}
 
-		epoch := altairBlock.Block.Slot / 32
-		domain, err := d.calculateDomain(
-			domains.DomainBeaconProposer,
-			obj.ForkInfo.GenesisValidatorsRoot,
-			uint64(epoch),
-			&obj.ForkInfo.Fork,
-		)
-		if err != nil {
-			d.log.Warn("failed to compute domain", "error", err)
-			return [96]byte{}, errors.InternalServerError()
+		header = api.BeaconBlockHeader{
+			Slot:          altairBlock.Block.Slot,
+			ProposerIndex: altairBlock.Block.ProposerIndex,
+			ParentRoot:    altairBlock.Block.ParentRoot,
+			StateRoot:     altairBlock.Block.StateRoot,
+			BodyRoot:      bodyRoot,
 		}
-		signature, err := account.SignBeaconProposal(
-			ctx,
-			uint64(altairBlock.Block.Slot),
-			uint64(altairBlock.Block.ProposerIndex),
-			altairBlock.Block.ParentRoot[:],
-			altairBlock.Block.StateRoot[:],
-			bodyRoot[:],
-			domain[:],
-		)
-		if err != nil {
-			d.log.Warn("failed to sign beacon proposal", "error", err)
-			return [96]byte{}, errors.InternalServerError()
-		}
-		d.log.Debug("signed beacon proposal")
-		return d.returnSignature(signature)
 	case "BELLATRIX":
 		bellatrixBlock, err := block.AsBlockRequestBellatrix()
 		if err != nil {
 			return [96]byte{}, errors.BadRequest("failed to get bellatrix block: %w", err)
 		}
 		header = bellatrixBlock.BlockHeader
+
 	case "CAPELLA":
 		capellaBlock, err := block.AsBlockRequestCapella()
 		if err != nil {
@@ -371,15 +342,10 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, account e2wt.Accoun
 	}
 
 	epoch := uint64(header.Slot / 32)
-	domain, err := d.calculateDomain(
-		domains.DomainBeaconProposer,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		epoch,
-		&obj.ForkInfo.Fork,
-	)
+	domainProvider := forkInfo.WithDomainType(domains.DomainBeaconProposer).DomainProvider(epoch)
+	domain, err := domainProvider.ComputeDomain()
 	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to compute domain", err)
 	}
 	signature, err := account.SignBeaconProposal(
 		ctx,
@@ -391,16 +357,19 @@ func (d *DirkSigner) BeaconBlockSigning(ctx context.Context, account e2wt.Accoun
 		domain[:],
 	)
 	if err != nil {
-		d.log.Warn("failed to sign beacon proposal", "error", err)
-		return [96]byte{}, errors.InternalServerError()
+		return d.returnUnexpectedFailure("failed to sign beacon proposal", err)
 	}
-	d.log.Debug("signed beacon proposal")
-	return d.returnSignature(signature)
+
+	return d.signature(signature)
 }
 
-func (d *DirkSigner) DepositSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.DepositSigning) ([96]byte, error) {
+func (d *DirkSigner) DepositSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.DepositSigning,
+) ([96]byte, error) {
 	// Grab the genesis fork version string first
-	genesisForkVersion, err := decodeHex(obj.Deposit.GenesisForkVersion)
+	genesisForkVersion, err := typeconv.DecodeHex(obj.Deposit.GenesisForkVersion)
 	if err != nil {
 		return [96]byte{}, errors.BadRequest("failed to decode genesis fork version: %w", err)
 	}
@@ -408,7 +377,7 @@ func (d *DirkSigner) DepositSigning(ctx context.Context, account e2wt.AccountPro
 		return [96]byte{}, errors.BadRequest("genesis fork version is not 4 bytes")
 	}
 	// Round-trip the obj.Deposit to a phase0.DepositMessage via json
-	// The payload to this api has an extra field and this is removes it plus gives us
+	// The payload to this api has an extra field and this removes it plus gives us
 	// a type that implements ssz.HashRoot
 	depositMessageJson, err := json.Marshal(obj.Deposit)
 	if err != nil {
@@ -420,218 +389,101 @@ func (d *DirkSigner) DepositSigning(ctx context.Context, account e2wt.AccountPro
 		return [96]byte{}, errors.BadRequest("failed to unmarshal deposit: %w", err)
 	}
 
-	// Compute the hash tree root
-	hashTreeRoot, err := deposit.HashTreeRoot()
-	if err != nil {
-		return [96]byte{}, errors.InternalServerError()
-	}
+	domainProvider := domains.DepositDomainProvider(genesisForkVersion)
 
-	// Compute the domain
-	// For deposits, only genesis fork version is needed
-	// genesis validators root must be nil
-	domain, err := signing.ComputeDomain(
-		domains.DomainDeposit,
-		genesisForkVersion,
-		nil, /* genesis validators root */
-	)
-	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-
-	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if err != nil {
-		d.log.Warn("failed to sign deposit", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-	d.log.Debug("signed deposit")
-	return d.returnSignature(signature)
+	return d.signHashRoot(ctx, account, deposit, domainProvider)
 }
 
-func (d *DirkSigner) RandaoRevealSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.RandaoRevealSigning) ([96]byte, error) {
+func (d *DirkSigner) RandaoRevealSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.RandaoRevealSigning,
+	forkInfo *fork.ForkInfo,
+) ([96]byte, error) {
 
 	randaoReveal := obj.RandaoReveal.Epoch
 	epoch, err := strconv.ParseUint(randaoReveal, 10, 64)
 	if err != nil {
 		return [96]byte{}, errors.BadRequest("failed to parse epoch: %w", err)
 	}
-	hasher := ssz.NewHasher()
-	hasher.AppendUint64(epoch)
-	hasher.FillUpTo32()
-	hashTreeRoot, err := hasher.HashRoot()
-	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
 
-	// Compute the domain
-	domain, err := d.calculateDomain(
-		domains.DomainRandao,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		epoch,
-		&obj.ForkInfo.Fork,
-	)
-	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
+	hashTreeRoot := typeconv.Uint64ToHashTreeRoot(epoch)
+	domainProvider := forkInfo.WithDomainType(domains.DomainRandao).DomainProvider(epoch)
 
-	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if err != nil {
-		d.log.Warn("failed to sign randao reveal", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-	d.log.Debug("signed randao reveal")
-	return d.returnSignature(signature)
+	return d.sign(ctx, account, hashTreeRoot, domainProvider)
 }
 
-func (d *DirkSigner) VoluntaryExitSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.VoluntaryExitSigning) ([96]byte, error) {
-	hashTreeRoot, err := obj.VoluntaryExit.HashTreeRoot()
-	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
+func (d *DirkSigner) VoluntaryExitSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.VoluntaryExitSigning,
+	forkInfo *fork.ForkInfo,
+) ([96]byte, error) {
+	epoch := uint64(obj.VoluntaryExit.Epoch)
+	domainProvider := forkInfo.WithDomainType(domains.DomainVoluntaryExit).DomainProvider(epoch)
 
-	// Compute the domain
-	domain, err := d.calculateDomain(
-		domains.DomainVoluntaryExit,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		uint64(obj.VoluntaryExit.Epoch),
-		&obj.ForkInfo.Fork,
-	)
-	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-
-	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if err != nil {
-		d.log.Warn("failed to sign voluntary exit", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-	d.log.Debug("signed voluntary exit")
-	return d.returnSignature(signature)
+	return d.signHashRoot(ctx, account, &obj.VoluntaryExit, domainProvider)
 }
 
-func (d *DirkSigner) SyncCommitteeMessageSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.SyncCommitteeMessageSigning) ([96]byte, error) {
+func (d *DirkSigner) SyncCommitteeMessageSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.SyncCommitteeMessageSigning,
+	forkInfo *fork.ForkInfo,
+) ([96]byte, error) {
 	slot, err := strconv.ParseUint(obj.SyncCommitteeMessage.Slot, 10, 64)
 	if err != nil {
 		return [96]byte{}, errors.BadRequest("failed to parse slot: %w", err)
 	}
-	beaconBlockRoot, err := decodeHex(obj.SyncCommitteeMessage.BeaconBlockRoot)
+	beaconBlockRoot, err := typeconv.DecodeHex(obj.SyncCommitteeMessage.BeaconBlockRoot)
 	if err != nil {
 		return [96]byte{}, errors.BadRequest("failed to decode beacon block root: %w", err)
 	}
 
+	if len(beaconBlockRoot) != 32 {
+		return [96]byte{}, errors.BadRequest("beacon block root is not 32 bytes")
+	}
+
+	htr := [32]byte{}
+	copy(htr[:], beaconBlockRoot)
+
 	epoch := slot / 32
 
-	// Compute the domain
-	domain, err := d.calculateDomain(
-		domains.DomainSyncCommittee,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		uint64(epoch),
-		&obj.ForkInfo.Fork,
-	)
-	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
+	domainProvider := forkInfo.WithDomainType(domains.DomainSyncCommittee).DomainProvider(epoch)
 
-	signature, err := account.SignGeneric(ctx, beaconBlockRoot[:], domain[:])
-	if err != nil {
-		d.log.Warn("failed to sign sync committee message", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-	d.log.Debug("signed sync committee message")
-	return d.returnSignature(signature)
+	return d.sign(ctx, account, htr, domainProvider)
 }
 
-func (d *DirkSigner) SyncCommitteeSelectionProofSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.SyncCommitteeSelectionProofSigning) ([96]byte, error) {
-	hashTreeRoot, err := obj.SyncAggregatorSelectionData.HashTreeRoot()
-	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
+func (d *DirkSigner) SyncCommitteeSelectionProofSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.SyncCommitteeSelectionProofSigning,
+	forkInfo *fork.ForkInfo,
+) ([96]byte, error) {
+	epoch := uint64(obj.SyncAggregatorSelectionData.Slot / 32)
+	domainProvider := forkInfo.WithDomainType(domains.DomainSyncCommiteeSelectionProof).DomainProvider(epoch)
 
-	epoch := obj.SyncAggregatorSelectionData.Slot / 32
-
-	// Compute the domain
-	domain, err := d.calculateDomain(
-		domains.DomainSyncCommiteeSelectionProof,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		uint64(epoch),
-		&obj.ForkInfo.Fork,
-	)
-	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-
-	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if err != nil {
-		d.log.Warn("failed to sign sync committee selection proof", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-	d.log.Debug("signed sync committee selection proof")
-	return d.returnSignature(signature)
+	return d.signHashRoot(ctx, account, &obj.SyncAggregatorSelectionData, domainProvider)
 }
 
-func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.SyncCommitteeContributionAndProofSigning) ([96]byte, error) {
-	hashTreeRoot, err := obj.ContributionAndProof.HashTreeRoot()
-	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
+func (d *DirkSigner) SyncCommitteeContributionAndProofSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.SyncCommitteeContributionAndProofSigning,
+	forkInfo *fork.ForkInfo,
+) ([96]byte, error) {
+	epoch := uint64(obj.ContributionAndProof.Contribution.Slot / 32)
+	domainProvider := forkInfo.WithDomainType(domains.DomainSyncContributionAndProof).DomainProvider(epoch)
 
-	epoch := obj.ContributionAndProof.Contribution.Slot / 32
-
-	// Compute the domain
-	domain, err := d.calculateDomain(
-		domains.DomainSyncContributionAndProof,
-		obj.ForkInfo.GenesisValidatorsRoot,
-		uint64(epoch),
-		&obj.ForkInfo.Fork,
-	)
-	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-
-	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if err != nil {
-		d.log.Warn("failed to sign sync committee contribution and proof", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-	d.log.Debug("signed sync committee contribution and proof")
-	return d.returnSignature(signature)
+	return d.signHashRoot(ctx, account, &obj.ContributionAndProof, domainProvider)
 }
 
-func (d *DirkSigner) ValidatorRegistrationSigning(ctx context.Context, account e2wt.AccountProtectingSigner, obj *api.ValidatorRegistrationSigning) ([96]byte, error) {
+func (d *DirkSigner) ValidatorRegistrationSigning(
+	ctx context.Context,
+	account e2wt.AccountProtectingSigner,
+	obj *api.ValidatorRegistrationSigning,
+) ([96]byte, error) {
+	domainProvider := domains.ValidatorRegistrationDomainProvider(d.genesisForkVersion)
 
-	hashTreeRoot, err := obj.ValidatorRegistration.HashTreeRoot()
-	if err != nil {
-		d.log.Warn("failed to compute hash tree root", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-
-	// Compute the domain
-	// For validator registrations, only genesis fork version is needed
-	// genesis validators root must be nil
-	domain, err := signing.ComputeDomain(
-		domains.DomainApplicationBuilder,
-		d.genesisForkVersion,
-		nil, /* genesis validators root */
-	)
-	if err != nil {
-		d.log.Warn("failed to compute domain", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-
-	signature, err := account.SignGeneric(ctx, hashTreeRoot[:], domain[:])
-	if err != nil {
-		d.log.Warn("failed to sign validator registration", "error", err)
-		return [96]byte{}, errors.InternalServerError()
-	}
-	d.log.Debug("signed validator registration")
-	return d.returnSignature(signature)
+	return d.signHashRoot(ctx, account, &obj.ValidatorRegistration, domainProvider)
 }

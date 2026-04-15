@@ -3,11 +3,11 @@ package signer
 import (
 	"context"
 
-	api "github.com/jshufro/remote-signer-dirk-interop/generated"
+	"github.com/jshufro/remote-signer-dirk-interop/generated"
 )
 
 type RemoteSigner[AccountType any] interface {
-	api.Signer[AccountType]
+	generated.Signer[AccountType]
 	PublicKeysProvider
 	// GetAccountForPubkey returns the account for a given public key.
 	// If the account is not found, it should return a PublicKeyNotFound error.
