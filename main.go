@@ -16,6 +16,7 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/config"
 	"github.com/jshufro/remote-signer-dirk-interop/generated/api"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner"
+	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/service"
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
@@ -126,7 +127,7 @@ func main() {
 	}
 
 	dirkSigner := dirksigner.NewDirkSigner(
-		cfg.GenesisForkVersion(),
+		domains.ForkVersion(cfg.GenesisForkVersion()),
 		dirkEndpoints,
 		cfg.Dirk.Wallet,
 		rootCA,

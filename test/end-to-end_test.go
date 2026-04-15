@@ -104,7 +104,7 @@ func startDaemons(t *testing.T, ids ...dirkdaemon.ID) []*e2wd.Endpoint {
 func newDirkSigner(t *testing.T, walletName string, endpoints []*e2wd.Endpoint, logger *slog.Logger) (*dirksigner.DirkSigner, error) {
 	ctx := t.Context()
 	dirkSigner := dirksigner.NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		[4]byte{0x00, 0x00, 0x00, 0x00},
 		endpoints,
 		walletName,
 		tlstest.CAPool(),

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -20,7 +19,6 @@ import (
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/typeconv"
 
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/herumi/bls-eth-go-binary/bls"
 	e2t "github.com/wealdtech/go-eth2-types/v2"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
@@ -28,7 +26,7 @@ import (
 )
 
 type DirkSigner struct {
-	genesisForkVersion []byte
+	genesisForkVersion domains.ForkVersion
 	endpoints          []*e2wd.Endpoint
 	walletName         string
 	rootCA             *x509.CertPool
@@ -50,7 +48,7 @@ func init() {
 var _ signer.RemoteSigner[e2wt.AccountProtectingSigner] = (*DirkSigner)(nil)
 
 func NewDirkSigner(
-	genesisForkVersion []byte,
+	genesisForkVersion domains.ForkVersion,
 	endpoints []*e2wd.Endpoint,
 	wallet string,
 	rootCA *x509.CertPool,
@@ -356,27 +354,16 @@ func (d *DirkSigner) DepositSigning(
 	obj *api.DepositSigning,
 ) ([96]byte, error) {
 	// Grab the genesis fork version string first
-	genesisForkVersion, err := typeconv.DecodeHex(obj.Deposit.GenesisForkVersion)
+	genesisForkVersion, err := typeconv.DecodeForkVersion(obj.Deposit.GenesisForkVersion)
 	if err != nil {
 		return [96]byte{}, errors.BadRequest("failed to decode genesis fork version: %w", err)
 	}
-	if len(genesisForkVersion) != 4 {
-		return [96]byte{}, errors.BadRequest("genesis fork version is not 4 bytes")
-	}
-	// Round-trip the obj.Deposit to a phase0.DepositMessage via json
-	// The payload to this api has an extra field and this removes it plus gives us
-	// a type that implements ssz.HashRoot
-	depositMessageJson, err := json.Marshal(obj.Deposit)
+	deposit, err := typeconv.DepositSigningToHashRoot(obj)
 	if err != nil {
-		return [96]byte{}, errors.BadRequest("failed to remarshal deposit: %w", err)
-	}
-	deposit := &phase0.DepositMessage{}
-	err = json.Unmarshal(depositMessageJson, deposit)
-	if err != nil {
-		return [96]byte{}, errors.BadRequest("failed to unmarshal deposit: %w", err)
+		return [96]byte{}, errors.BadRequest("failed to convert deposit to hash root: %w", err)
 	}
 
-	domain := domains.DepositDomain(domains.ForkVersion(genesisForkVersion))
+	domain := domains.DepositDomain(genesisForkVersion)
 
 	return d.signHashRoot(ctx, account, deposit, domain)
 }
@@ -470,7 +457,7 @@ func (d *DirkSigner) ValidatorRegistrationSigning(
 	account e2wt.AccountProtectingSigner,
 	obj *api.ValidatorRegistrationSigning,
 ) ([96]byte, error) {
-	domain := domains.ValidatorRegistrationDomain(domains.ForkVersion(d.genesisForkVersion))
+	domain := domains.ValidatorRegistrationDomain(d.genesisForkVersion)
 
 	return d.signHashRoot(ctx, account, &obj.ValidatorRegistration, domain)
 }
