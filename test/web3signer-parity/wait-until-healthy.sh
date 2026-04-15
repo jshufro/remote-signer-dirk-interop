@@ -3,7 +3,7 @@
 MAX_RETRIES=30
 RETRIES=0
 SLEEP_INTERVAL=1
-while ! curl -f http://localhost:9000/api/v1/eth2/publicKeys | grep 0xab0b; do
+while ! curl -s -f http://localhost:9000/api/v1/eth2/publicKeys | grep -q 0xab0b; do
 	sleep $SLEEP_INTERVAL
 	RETRIES=$((RETRIES + 1))
 	if [ $RETRIES -ge $MAX_RETRIES ]; then

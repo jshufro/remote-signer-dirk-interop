@@ -19,7 +19,5 @@ ci:
 		--config-file /app/config.yaml \
 		eth2 
 	./wait-until-healthy.sh
-	go test ./...
-	docker logs web3signer-parity
+	go test ./... || (docker logs web3signer-parity && docker stop web3signer-parity && exit 1)
 	docker stop web3signer-parity
-

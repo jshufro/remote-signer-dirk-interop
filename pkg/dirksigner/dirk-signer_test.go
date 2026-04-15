@@ -25,9 +25,11 @@ import (
 // Most of the coverage is in end-to-end tests,
 // this file just covers some odds and ends.
 
+var validForkVersion = domains.ForkVersion{0x00, 0x00, 0x00, 0x00}
+
 func TestNilLogger(t *testing.T) {
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -64,7 +66,7 @@ func (f *fakeSignature) VerifyAggregateCommon([]byte, []e2t.PublicKey) bool {
 
 func TestReturnSignatureError(t *testing.T) {
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -81,7 +83,7 @@ func TestReturnSignatureError(t *testing.T) {
 
 func TestEmptyEndpointsError(t *testing.T) {
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -92,36 +94,6 @@ func TestEmptyEndpointsError(t *testing.T) {
 	err := dirk.Open(t.Context(), slog.LevelInfo)
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
-	}
-}
-
-type erroringDomainProvider struct{}
-
-var _ domains.DomainProvider = (*erroringDomainProvider)(nil)
-
-func (e *erroringDomainProvider) ComputeDomain() ([]byte, error) {
-	return nil, errors.InternalServerError()
-}
-
-func TestErroringDomainProvider(t *testing.T) {
-	logBuf := bytes.Buffer{}
-	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
-	)
-	_, err := dirk.sign(t.Context(), nil, [32]byte{}, &erroringDomainProvider{})
-	if err == nil {
-		t.Fatalf("expected error, got %v", err)
-	}
-	if !strings.Contains(err.Error(), "internal_server_error") {
-		t.Fatalf("expected error `internal_server_error`, got `%v`", err)
-	}
-	if !strings.Contains(logBuf.String(), "failed to compute domain") {
-		t.Fatalf("expected log to contain `failed to compute domain`, got `%v`", logBuf.String())
 	}
 }
 
@@ -195,14 +167,14 @@ func (e *erroringHashRoot) HashTreeRootWith(hh ssz.HashWalker) error {
 func TestErroringHashRoot(t *testing.T) {
 	logBuf := bytes.Buffer{}
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
 		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
 		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
 	)
-	_, err := dirk.signHashRoot(t.Context(), nil, &erroringHashRoot{shouldError: true}, validForkInfo.WithDomainType(domains.DomainSelectionProof).DomainProvider(0))
+	_, err := dirk.signHashRoot(t.Context(), nil, &erroringHashRoot{shouldError: true}, validForkInfo.WithDomainType(domains.DomainSelectionProof).Domain(0))
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
 	}
@@ -223,7 +195,7 @@ var validForkInfo = &fork.ForkInfo{
 func TestSignGenericError(t *testing.T) {
 	logBuf := bytes.Buffer{}
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -232,7 +204,7 @@ func TestSignGenericError(t *testing.T) {
 	)
 	fakeAccount := fakeDirkAccount{shouldError: true}
 	dirk.dirk = &fakeDirk{accounts: []fakeDirkAccount{fakeAccount}}
-	_, err := dirk.sign(t.Context(), &fakeAccount, [32]byte{}, validForkInfo.WithDomainType(domains.DomainSelectionProof).DomainProvider(0))
+	_, err := dirk.sign(t.Context(), &fakeAccount, [32]byte{}, validForkInfo.WithDomainType(domains.DomainSelectionProof).Domain(0))
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
 	}
@@ -246,7 +218,7 @@ func TestSignGenericError(t *testing.T) {
 
 func TestAggregationSlotSigning(t *testing.T) {
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -269,7 +241,7 @@ func TestAggregationSlotSigning(t *testing.T) {
 
 func TestAggregateAndProofSigningV2(t *testing.T) {
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -370,7 +342,7 @@ func TestAggregateAndProofSigningV2(t *testing.T) {
 
 func TestAttestationSigningError(t *testing.T) {
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -406,7 +378,7 @@ func TestAttestationSigningError(t *testing.T) {
 func TestBeaconBlockSigning(t *testing.T) {
 	logBuf := bytes.Buffer{}
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -533,7 +505,7 @@ func TestBeaconBlockSigning(t *testing.T) {
 func TestDepositSigningError(t *testing.T) {
 	logBuf := bytes.Buffer{}
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -585,15 +557,39 @@ func TestDepositSigningError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "genesis fork version is not 4 bytes") {
-		t.Fatalf("expected error `genesis fork version is not 4 bytes`, got `%v`", err)
+	if !strings.Contains(err.Error(), "failed to decode genesis fork version: hex string is 5 bytes") {
+		t.Fatalf("expected error `failed to decode genesis fork version: hex string is 5 bytes`, got `%v`", err)
+	}
+
+	// Test invalid pubkey in the deposit signing request
+	jsonMsg = `{
+		"type": "DEPOSIT",
+		"deposit": {
+			"genesis_fork_version": "0x00000000",
+			"pubkey": "invalid",
+			"withdrawal_credentials": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"amount": "1000000000"
+		}
+	}`
+	obj = &api.DepositSigning{}
+	err = json.Unmarshal([]byte(jsonMsg), obj)
+	if err != nil {
+		t.Fatalf("failed to unmarshal json: %v", err)
+	}
+
+	_, err = dirk.DepositSigning(t.Context(), nil, obj)
+	if err == nil {
+		t.Fatalf("expected error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "failed to convert deposit to hash root: failed to decode pubkey") {
+		t.Fatalf("expected error `failed to convert deposit to hash root: failed to decode pubkey`, got `%v`", err)
 	}
 }
 
 func TestRandaoRevealSigningError(t *testing.T) {
 	logBuf := bytes.Buffer{}
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		validForkVersion,
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,
@@ -626,7 +622,7 @@ func TestRandaoRevealSigningError(t *testing.T) {
 func TestSyncCommitteeMessageSigningError(t *testing.T) {
 	logBuf := bytes.Buffer{}
 	dirk := NewDirkSigner(
-		[]byte{0x00, 0x00, 0x00, 0x00},
+		[4]byte{0x00, 0x00, 0x00, 0x00},
 		[]*e2wd.Endpoint{},
 		"Wallet 1",
 		nil,

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/jshufro/remote-signer-dirk-interop/generated/api"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/typeconv"
@@ -99,29 +98,10 @@ func (f *ForkInfo) WithDomainType(domainType domains.DomainType) *forkInfoWithDo
 	}
 }
 
-type forkInfoWithDomainTypeAndEpoch struct {
-	domainType            domains.DomainType
-	forkVersion           []byte
-	genesisValidatorsRoot []byte
-	epoch                 uint64
-}
-
-func (f *forkInfoWithDomainType) DomainProvider(epoch uint64) *forkInfoWithDomainTypeAndEpoch {
-	return &forkInfoWithDomainTypeAndEpoch{
-		domainType:            f.domainType,
-		forkVersion:           f.forkInfo.ForkVersion(epoch),
-		genesisValidatorsRoot: f.forkInfo.GenesisValidatorsRoot,
-		epoch:                 epoch,
-	}
-}
-
-var _ domains.DomainProvider = (*forkInfoWithDomainTypeAndEpoch)(nil)
-
-func (f *forkInfoWithDomainTypeAndEpoch) ComputeDomain() ([]byte, error) {
-
-	return signing.ComputeDomain(
+func (f *forkInfoWithDomainType) Domain(epoch uint64) domains.Domain {
+	return domains.ComputeDomain(
 		f.domainType,
-		f.forkVersion,
-		f.genesisValidatorsRoot,
+		domains.ForkVersion(f.forkInfo.ForkVersion(epoch)),
+		domains.Root(f.forkInfo.GenesisValidatorsRoot),
 	)
 }
