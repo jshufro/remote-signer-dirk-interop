@@ -171,4 +171,81 @@ func TestAggregateAndProofSigningV2(t *testing.T) {
 	if !strings.Contains(err.Error(), "unknown aggregate and proof type") {
 		t.Fatalf("expected error `unknown aggregate and proof type`, got `%v`", err)
 	}
+
+	jsonMsg = `{
+		"type": "AGGREGATE_AND_PROOF_V2",
+		"aggregate_and_proof": {
+			"version": true
+		}
+	}`
+
+	obj = &api.AggregateAndProofSigningV2{}
+	err = json.Unmarshal([]byte(jsonMsg), obj)
+	if err != nil {
+		t.Fatalf("failed to unmarshal json: %v", err)
+	}
+
+	// discriminator of wrong type should return a BadRequest error
+	_, err = dirk.AggregateAndProofSigningV2(t.Context(), nil, obj, nil)
+	if err == nil {
+		t.Fatalf("expected error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "failed to get discriminator") {
+		t.Fatalf("expected error `failed to get discriminator`, got `%v`", err)
+	}
+}
+
+func TestBeaconBlockSigning(t *testing.T) {
+	dirk := NewDirkSigner(
+		[]byte{0x00, 0x00, 0x00, 0x00},
+		[]*e2wd.Endpoint{},
+		"Wallet 1",
+		nil,
+		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
+		nil,
+	)
+
+	jsonMsg := `{
+		"type": "BLOCK_V2",
+		"beacon_block": {
+			"version": "invalid"
+		}
+	}`
+
+	obj := &api.BeaconBlockSigning{}
+	err := json.Unmarshal([]byte(jsonMsg), obj)
+	if err != nil {
+		t.Fatalf("failed to unmarshal json: %v", err)
+	}
+
+	// invalid discriminator should return a BadRequest error
+	_, err = dirk.BeaconBlockSigning(t.Context(), nil, obj, nil)
+	if err == nil {
+		t.Fatalf("expected error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown block type") {
+		t.Fatalf("expected error `unknown block type`, got `%v`", err)
+	}
+
+	jsonMsg = `{
+		"type": "BLOCK_V2",
+		"beacon_block": {
+			"version": true
+		}
+	}`
+
+	obj = &api.BeaconBlockSigning{}
+	err = json.Unmarshal([]byte(jsonMsg), obj)
+	if err != nil {
+		t.Fatalf("failed to unmarshal json: %v", err)
+	}
+
+	// discriminator of wrong type should return a BadRequest error
+	_, err = dirk.BeaconBlockSigning(t.Context(), nil, obj, nil)
+	if err == nil {
+		t.Fatalf("expected error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "failed to get discriminator") {
+		t.Fatalf("expected error `failed to get discriminator`, got `%v`", err)
+	}
 }
