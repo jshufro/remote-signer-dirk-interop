@@ -42,7 +42,7 @@ func (f *fakeSigner) GetAccountForPubkey(ctx context.Context, pubkey [48]byte) (
 	return fakeAccount{}, nil
 }
 
-func (f *fakeSigner) AggregationSlotSigning(ctx context.Context, pubkey fakeAccount, obj *api.AggregationSlotSigning, forkInfo *fork.ForkInfo) ([96]byte, error) {
+func (f *fakeSigner) AggregationSlotSigning(ctx context.Context, pubkey fakeAccount, obj *api.AggregationSlotSigning, domainProvider *fork.ForkInfo) ([96]byte, error) {
 	if f.shouldError {
 		return [96]byte{}, errors.InternalServerError()
 	}

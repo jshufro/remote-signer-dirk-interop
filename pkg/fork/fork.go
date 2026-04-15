@@ -80,15 +80,48 @@ func (f *ForkInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (f *ForkInfo) ComputeDomain(domainType domains.DomainType, epoch uint64) ([]byte, error) {
-	forkVersion := f.Fork.CurrentVersion
+func (f *ForkInfo) ForkVersion(epoch uint64) []byte {
 	if epoch < f.Fork.Epoch {
-		forkVersion = f.Fork.PreviousVersion
+		return f.Fork.PreviousVersion
 	}
+	return f.Fork.CurrentVersion
+}
+
+type forkInfoWithDomainType struct {
+	forkInfo   *ForkInfo
+	domainType domains.DomainType
+}
+
+func (f *ForkInfo) WithDomainType(domainType domains.DomainType) *forkInfoWithDomainType {
+	return &forkInfoWithDomainType{
+		forkInfo:   f,
+		domainType: domainType,
+	}
+}
+
+type forkInfoWithDomainTypeAndEpoch struct {
+	domainType            domains.DomainType
+	forkVersion           []byte
+	genesisValidatorsRoot []byte
+	epoch                 uint64
+}
+
+func (f *forkInfoWithDomainType) DomainProvider(epoch uint64) *forkInfoWithDomainTypeAndEpoch {
+	return &forkInfoWithDomainTypeAndEpoch{
+		domainType:            f.domainType,
+		forkVersion:           f.forkInfo.ForkVersion(epoch),
+		genesisValidatorsRoot: f.forkInfo.GenesisValidatorsRoot,
+		epoch:                 epoch,
+	}
+}
+
+var _ domains.DomainProvider = (*forkInfoWithDomainTypeAndEpoch)(nil)
+
+func (f *forkInfoWithDomainTypeAndEpoch) ComputeDomain() ([]byte, error) {
 
 	return signing.ComputeDomain(
-		domainType,
-		forkVersion,
-		f.GenesisValidatorsRoot,
+		f.domainType,
+		f.forkVersion,
+		f.genesisValidatorsRoot,
 	)
 }
