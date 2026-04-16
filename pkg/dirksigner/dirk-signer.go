@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/jshufro/remote-signer-dirk-interop/generated/api"
@@ -26,15 +27,15 @@ import (
 )
 
 type DirkSigner struct {
-	genesisForkVersion domains.ForkVersion
-	endpoints          []*e2wd.Endpoint
-	walletName         string
-	rootCA             *x509.CertPool
-	tlsProvider        tlsprovider.TLSProvider
-	log                *slog.Logger
+	EnableDirkMetrics  bool                // If true, Dirk registers metrics with the Prometheus registry
+	GenesisForkVersion domains.ForkVersion // Genesis fork version must be configured for validator_registration
+	RootCA             *x509.CertPool
 
-	dirk     dirk.DirkSigner
+	dirk dirk.DirkSigner
+
 	accounts sync.Map
+	started  atomic.Bool
+	logger   *slog.Logger
 }
 
 func init() {
@@ -47,31 +48,41 @@ func init() {
 // static assertion that DirkSigner implements the RemoteSigner interface
 var _ signer.RemoteSigner[e2wt.AccountProtectingSigner] = (*DirkSigner)(nil)
 
-func NewDirkSigner(
-	genesisForkVersion domains.ForkVersion,
-	endpoints []*e2wd.Endpoint,
-	wallet string,
-	rootCA *x509.CertPool,
-	tlsProvider tlsprovider.TLSProvider,
-	log *slog.Logger,
-) *DirkSigner {
-	if log == nil {
-		log = slog.Default()
-	}
-	return &DirkSigner{
-		genesisForkVersion: genesisForkVersion,
-		endpoints:          endpoints,
-		walletName:         wallet,
-		rootCA:             rootCA,
-		tlsProvider:        tlsProvider,
-		log:                log,
-		accounts:           sync.Map{},
-	}
+type dirkMetricsMonitor struct{}
+
+func (d *dirkMetricsMonitor) Presenter() string {
+	return "prometheus"
 }
 
-func (d *DirkSigner) Open(ctx context.Context, logLevel slog.Level) error {
+func (d *DirkSigner) SetLogger(logger *slog.Logger) {
+	d.logger = logger
+}
+
+func (d *DirkSigner) Log() *slog.Logger {
+	if d.logger == nil {
+		return slog.Default()
+	}
+	return d.logger
+}
+
+func (d *DirkSigner) Open(
+	ctx context.Context,
+	walletName string,
+	endpoints []*e2wd.Endpoint,
+	tlsProvider tlsprovider.TLSProvider,
+	logLevel slog.Level,
+) error {
 	var err error
-	d.dirk, err = dirk.NewDirk(ctx, d.walletName, d.endpoints, d.tlsProvider, d.rootCA, logLevel)
+
+	if d.started.Swap(true) {
+		return fmt.Errorf("dirk signer already started")
+	}
+
+	extraE2WDParameters := []e2wd.Parameter{}
+	if d.EnableDirkMetrics {
+		extraE2WDParameters = append(extraE2WDParameters, e2wd.WithMonitor(&dirkMetricsMonitor{}))
+	}
+	d.dirk, err = dirk.NewDirk(ctx, walletName, endpoints, tlsProvider, d.RootCA, logLevel, extraE2WDParameters...)
 	if err != nil {
 		return fmt.Errorf("failed to create dirk: %w", err)
 	}
@@ -105,7 +116,7 @@ func (d *DirkSigner) GetAccountForPubkey(ctx context.Context, pubkey [48]byte) (
 	if ok {
 		aps, ok := account.(e2wt.AccountProtectingSigner)
 		if !ok {
-			d.log.Error("account is not a protecting signer", "pubkey", hex.EncodeToString(pubkey[:]))
+			d.Log().Error("account is not a protecting signer", "pubkey", hex.EncodeToString(pubkey[:]))
 			return nil, errors.InternalServerError()
 		}
 		return aps, nil
@@ -152,7 +163,7 @@ func (d *DirkSigner) signHashRoot(
 }
 
 func (d *DirkSigner) returnUnexpectedFailure(msg string, err error) ([96]byte, error) {
-	d.log.Warn(msg, "error", err)
+	d.Log().Warn(msg, "error", err)
 	return [96]byte{}, errors.InternalServerError()
 }
 
@@ -187,7 +198,7 @@ func (d *DirkSigner) AggregateAndProofSigningV2(
 	aggregateAndProof := obj.AggregateAndProof
 	discriminator, err := aggregateAndProof.Discriminator()
 	if err != nil {
-		d.log.Warn("failed to get discriminator", "error", err)
+		d.Log().Warn("failed to get discriminator", "error", err)
 		return [96]byte{}, errors.BadRequest("failed to get discriminator: %w", err)
 	}
 
@@ -209,7 +220,7 @@ func (d *DirkSigner) AggregateAndProofSigningV2(
 		epoch = uint64(electraAggregateAndProof.Data.Aggregate.Data.Slot / 32)
 		htr = &electraAggregateAndProof.Data
 	default:
-		d.log.Warn("unknown aggregate and proof type", "discriminator", discriminator)
+		d.Log().Warn("unknown aggregate and proof type", "discriminator", discriminator)
 		return [96]byte{}, errors.BadRequest("unknown aggregate and proof type: %s", discriminator)
 	}
 
@@ -326,7 +337,7 @@ func (d *DirkSigner) BeaconBlockSigning(
 		}
 		header = fuluBlock.BlockHeader
 	default:
-		d.log.Warn("unknown block type", "discriminator", discriminator)
+		d.Log().Warn("unknown block type", "discriminator", discriminator)
 		return [96]byte{}, errors.BadRequest("unknown block type: %s", discriminator)
 	}
 
@@ -457,7 +468,7 @@ func (d *DirkSigner) ValidatorRegistrationSigning(
 	account e2wt.AccountProtectingSigner,
 	obj *api.ValidatorRegistrationSigning,
 ) ([96]byte, error) {
-	domain := domains.ValidatorRegistrationDomain(d.genesisForkVersion)
+	domain := domains.ValidatorRegistrationDomain(d.GenesisForkVersion)
 
 	return d.signHashRoot(ctx, account, &obj.ValidatorRegistration, domain)
 }

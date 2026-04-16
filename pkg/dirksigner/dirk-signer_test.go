@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -25,19 +26,48 @@ import (
 // Most of the coverage is in end-to-end tests,
 // this file just covers some odds and ends.
 
-var validForkVersion = domains.ForkVersion{0x00, 0x00, 0x00, 0x00}
-
 func TestNilLogger(t *testing.T) {
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		nil,
-	)
-	if dirk.log != slog.Default() {
-		t.Fatalf("expected default logger, got %v", dirk.log)
+	dirk := DirkSigner{}
+	err := dirk.Open(t.Context(), "Wallet 1", nil, tlstest.NewMockTLSProvider(tlstest.ClientTest01), slog.LevelInfo)
+	if err == nil {
+		t.Fatalf("expected an error, got none")
+	}
+	if !strings.Contains(err.Error(), "failed to create dirk") {
+		t.Fatalf("expected error `failed to create dirk`, got `%v`", err)
+	}
+	// Logger is initialized early, so even though the Open call errors, it should now be non-nil
+	if dirk.Log() != slog.Default() {
+		t.Fatalf("expected default logger, got %v", dirk.Log())
+	}
+}
+
+func TestStartTwiceError(t *testing.T) {
+	// Start on two separate threads and get the results back via a channel
+	ch := make(chan error, 2)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	dirk := DirkSigner{}
+	for i := 0; i < 2; i++ {
+		go func() {
+			defer wg.Done()
+			err := dirk.Open(t.Context(), "Wallet 1", []*e2wd.Endpoint{e2wd.NewEndpoint("localhost", 9090)}, tlstest.NewMockTLSProvider(tlstest.ClientTest01), slog.LevelInfo)
+			ch <- err
+		}()
+	}
+	wg.Wait()
+	close(ch)
+	errors := []error{}
+	for err := range ch {
+		if err != nil {
+			errors = append(errors, err)
+		}
+	}
+	if len(errors) != 1 {
+		t.Logf("errors: %v", errors)
+		t.Fatalf("expected 1 error, got %v", len(errors))
+	}
+	if !strings.Contains(errors[0].Error(), "dirk signer already started") {
+		t.Fatalf("expected error `dirk signer already started`, got `%v`", errors[0])
 	}
 }
 
@@ -65,14 +95,7 @@ func (f *fakeSignature) VerifyAggregateCommon([]byte, []e2t.PublicKey) bool {
 }
 
 func TestReturnSignatureError(t *testing.T) {
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		nil,
-	)
+	dirk := DirkSigner{}
 
 	signature := &fakeSignature{marshalError: true}
 	_, err := dirk.signature(signature)
@@ -82,16 +105,9 @@ func TestReturnSignatureError(t *testing.T) {
 }
 
 func TestEmptyEndpointsError(t *testing.T) {
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		nil,
-	)
+	dirk := DirkSigner{}
 
-	err := dirk.Open(t.Context(), slog.LevelInfo)
+	err := dirk.Open(t.Context(), "Wallet 1", []*e2wd.Endpoint{}, tlstest.NewMockTLSProvider(tlstest.ClientTest01), slog.LevelInfo)
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
 	}
@@ -166,14 +182,9 @@ func (e *erroringHashRoot) HashTreeRootWith(hh ssz.HashWalker) error {
 
 func TestErroringHashRoot(t *testing.T) {
 	logBuf := bytes.Buffer{}
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
-	)
+	dirk := DirkSigner{
+		logger: slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
+	}
 	_, err := dirk.signHashRoot(t.Context(), nil, &erroringHashRoot{shouldError: true}, validForkInfo.WithDomainType(domains.DomainSelectionProof).Domain(0))
 	if err == nil {
 		t.Fatalf("expected error, got %v", err)
@@ -194,14 +205,9 @@ var validForkInfo = &fork.ForkInfo{
 
 func TestSignGenericError(t *testing.T) {
 	logBuf := bytes.Buffer{}
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
-	)
+	dirk := DirkSigner{
+		logger: slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
+	}
 	fakeAccount := fakeDirkAccount{shouldError: true}
 	dirk.dirk = &fakeDirk{accounts: []fakeDirkAccount{fakeAccount}}
 	_, err := dirk.sign(t.Context(), &fakeAccount, [32]byte{}, validForkInfo.WithDomainType(domains.DomainSelectionProof).Domain(0))
@@ -217,14 +223,7 @@ func TestSignGenericError(t *testing.T) {
 }
 
 func TestAggregationSlotSigning(t *testing.T) {
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		nil,
-	)
+	dirk := DirkSigner{}
 
 	// Invalid AggregationSlot.Slot should return a BadRequest error
 	_, err := dirk.AggregationSlotSigning(t.Context(), nil, &api.AggregationSlotSigning{
@@ -240,14 +239,7 @@ func TestAggregationSlotSigning(t *testing.T) {
 }
 
 func TestAggregateAndProofSigningV2(t *testing.T) {
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		nil,
-	)
+	dirk := DirkSigner{}
 
 	jsonMsg := `{
 		"type": "AGGREGATE_AND_PROOF_V2",
@@ -341,14 +333,7 @@ func TestAggregateAndProofSigningV2(t *testing.T) {
 }
 
 func TestAttestationSigningError(t *testing.T) {
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		nil,
-	)
+	dirk := DirkSigner{}
 
 	fakeAccount := fakeDirkAccount{shouldError: true}
 	dirk.dirk = &fakeDirk{accounts: []fakeDirkAccount{fakeAccount}}
@@ -377,14 +362,9 @@ func TestAttestationSigningError(t *testing.T) {
 
 func TestBeaconBlockSigning(t *testing.T) {
 	logBuf := bytes.Buffer{}
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
-	)
+	dirk := DirkSigner{
+		logger: slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
+	}
 
 	jsonMsg := `{
 		"type": "BLOCK_V2",
@@ -504,14 +484,9 @@ func TestBeaconBlockSigning(t *testing.T) {
 
 func TestDepositSigningError(t *testing.T) {
 	logBuf := bytes.Buffer{}
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
-	)
+	dirk := DirkSigner{
+		logger: slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
+	}
 
 	// Test invalid GenesisForkVersion hex in the deposit signing request
 	jsonMsg := `{
@@ -588,14 +563,9 @@ func TestDepositSigningError(t *testing.T) {
 
 func TestRandaoRevealSigningError(t *testing.T) {
 	logBuf := bytes.Buffer{}
-	dirk := NewDirkSigner(
-		validForkVersion,
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
-	)
+	dirk := DirkSigner{
+		logger: slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
+	}
 
 	// Test invalid epoch in the randao reveal signing request
 	jsonMsg := `{
@@ -621,14 +591,9 @@ func TestRandaoRevealSigningError(t *testing.T) {
 
 func TestSyncCommitteeMessageSigningError(t *testing.T) {
 	logBuf := bytes.Buffer{}
-	dirk := NewDirkSigner(
-		[4]byte{0x00, 0x00, 0x00, 0x00},
-		[]*e2wd.Endpoint{},
-		"Wallet 1",
-		nil,
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
-	)
+	dirk := DirkSigner{
+		logger: slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{})),
+	}
 
 	// Test invalid slot in the sync committee message signing request
 	jsonMsg := `{

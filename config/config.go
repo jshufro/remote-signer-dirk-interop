@@ -32,6 +32,11 @@ type Config struct {
 		RefreshRetry     time.Duration `mapstructure:"refresh_retry"`
 	}
 
+	Metrics struct {
+		ListenAddress string `mapstructure:"listen_address"`
+		ListenPort    uint16 `mapstructure:"listen_port"`
+	} `mapstructure:"metrics"`
+
 	// Network is either mainnet or hoodi
 	Network            string `mapstructure:"network"`
 	genesisForkVersion []byte
