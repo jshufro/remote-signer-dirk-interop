@@ -2,6 +2,10 @@ log_level: "debug"
 log_format: "json"
 listen_address: "0.0.0.0"
 listen_port: 9090
+metrics:
+  listen_address: "0.0.0.0"
+  # It's generally safe to use the same port as the main server, if you want.
+  listen_port: 9091
 dirk:
   timeout: 4s
   # Dirk endpoints: "host:port" or "domain:port" (no scheme).
