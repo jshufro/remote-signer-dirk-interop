@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/jshufro/remote-signer-dirk-interop/config"
 	"github.com/jshufro/remote-signer-dirk-interop/generated/api"
@@ -19,6 +20,8 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/service"
 	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
 )
 
@@ -126,17 +129,14 @@ func main() {
 		dirkEndpoints[i] = e2wd.NewEndpoint(host, uint32(port))
 	}
 
-	dirkSigner := dirksigner.NewDirkSigner(
-		domains.ForkVersion(cfg.GenesisForkVersion()),
-		dirkEndpoints,
-		cfg.Dirk.Wallet,
-		rootCA,
-		tlsProvider,
-		log,
-	)
+	dirkSigner := &dirksigner.DirkSigner{
+		GenesisForkVersion: domains.ForkVersion(cfg.GenesisForkVersion()),
+		RootCA:             rootCA,
+	}
+	dirkSigner.SetLogger(log)
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Dirk.Timeout)
 	defer cancel()
-	err = dirkSigner.Open(ctx, logLevel)
+	err = dirkSigner.Open(ctx, cfg.Dirk.Wallet, dirkEndpoints, tlsProvider, logLevel)
 	if err != nil {
 		log.Error("failed to open dirk signer", "error", err)
 		os.Exit(1)
@@ -160,6 +160,26 @@ func main() {
 		}
 	})
 
+	var metricsServer *http.Server
+	var metricsListener net.Listener
+	if cfg.Metrics.ListenPort == cfg.ListenPort && cfg.Metrics.ListenAddress == cfg.ListenAddress {
+		mux.Handle("/metrics", promhttp.Handler())
+	} else if cfg.Metrics.ListenPort != 0 {
+		metricsListener, err = net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Metrics.ListenAddress, cfg.Metrics.ListenPort))
+		if err != nil {
+			log.Error("failed to listen for metrics", "error", err)
+			os.Exit(1)
+		}
+		defer func() {
+			_ = metricsListener.Close()
+		}()
+		serveMux := http.NewServeMux()
+		serveMux.Handle("/metrics", promhttp.Handler())
+		metricsServer = &http.Server{
+			Handler: serveMux,
+		}
+	}
+
 	server := http.Server{
 		Handler: api.HandlerWithOptions(service, api.StdHTTPServerOptions{
 			BaseRouter: mux,
@@ -177,9 +197,43 @@ func main() {
 			log.Error("failed to shutdown server", "error", err)
 		}
 
+		if metricsServer != nil {
+			err = metricsServer.Shutdown(context.Background())
+			if err != nil {
+				log.Error("failed to shutdown metrics server", "error", err)
+			}
+		}
+
 		// Restore sigterm handler
 		signal.Reset(os.Interrupt, syscall.SIGTERM)
 	}()
+
+	if metricsServer != nil {
+		go func() {
+			err = metricsServer.Serve(metricsListener)
+			if err != http.ErrServerClosed && err != nil {
+				log.Error("failed to serve metrics", "error", err)
+				os.Exit(1)
+			}
+			if err == http.ErrServerClosed {
+				log.Info("metrics server closed")
+			}
+		}()
+	}
+
+	prometheus.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "remote_signer_dirk_interop_up",
+		Help: "Indicates if the remote signer dirk interop is up",
+	}, func() float64 {
+		return 1
+	}))
+
+	startTimeGauge := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "remote_signer_dirk_interop_start_time",
+		Help: "Indicates the start time of the remote signer dirk interop",
+	})
+	startTimeGauge.Set(float64(time.Now().Unix()))
+	prometheus.MustRegister(startTimeGauge)
 
 	err = server.Serve(listener)
 	if err == http.ErrServerClosed {

@@ -103,16 +103,13 @@ func startDaemons(t *testing.T, ids ...dirkdaemon.ID) []*e2wd.Endpoint {
 
 func newDirkSigner(t *testing.T, walletName string, endpoints []*e2wd.Endpoint, logger *slog.Logger) (*dirksigner.DirkSigner, error) {
 	ctx := t.Context()
-	dirkSigner := dirksigner.NewDirkSigner(
-		[4]byte{0x00, 0x00, 0x00, 0x00},
-		endpoints,
-		walletName,
-		tlstest.CAPool(),
-		tlstest.NewMockTLSProvider(tlstest.ClientTest01),
-		logger,
-	)
+	dirkSigner := &dirksigner.DirkSigner{
+		EnableDirkMetrics: true,
+		RootCA:            tlstest.CAPool(),
+	}
+	dirkSigner.SetLogger(logger)
 
-	err := dirkSigner.Open(ctx, slog.LevelDebug)
+	err := dirkSigner.Open(ctx, walletName, endpoints, tlstest.NewMockTLSProvider(tlstest.ClientTest01), slog.LevelDebug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open dirk signer: %w", err)
 	}

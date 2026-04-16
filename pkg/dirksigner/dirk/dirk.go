@@ -93,6 +93,7 @@ func NewDirk(
 	tlsProvider tlsprovider.TLSProvider,
 	rootCA *x509.CertPool,
 	logLevel slog.Level,
+	extraE2WDParameters ...e2wd.Parameter,
 ) (*Dirk, error) {
 	var err error
 	tlsConfig := &tls.Config{
@@ -101,12 +102,14 @@ func NewDirk(
 	}
 	credentials := credentials.NewTLS(tlsConfig)
 	zerologLevel := slogLevelToZerologLevel(logLevel)
-	wallet, err := e2wd.Open(ctx,
+
+	parameters := append(extraE2WDParameters,
 		e2wd.WithName(walletName),
 		e2wd.WithEndpoints(endpoints),
 		e2wd.WithCredentials(credentials),
 		e2wd.WithLogLevel(zerologLevel),
 	)
+	wallet, err := e2wd.Open(ctx, parameters...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open wallet: %w", err)
 	}
