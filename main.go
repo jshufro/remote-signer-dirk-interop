@@ -44,19 +44,17 @@ func startDirkSigner(ctx context.Context, cfg *config.Config, log *slog.Logger) 
 	var err error
 
 	// Read CA into memory
-	var rootCA *x509.CertPool
+	rootCA, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system cert pool: %w", err)
+	}
+
 	if cfg.SSL.RootCA != "" {
 		rootCABytes, err := os.ReadFile(cfg.SSL.RootCA)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read root CA: %w", err)
 		}
-		rootCA = x509.NewCertPool()
 		rootCA.AppendCertsFromPEM(rootCABytes)
-	} else {
-		rootCA, err = x509.SystemCertPool()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get system cert pool: %w", err)
-		}
 	}
 
 	tlsProvider := tlsprovider.NewTLSProvider(cfg.SSL.Cert, cfg.SSL.PrivKey)
