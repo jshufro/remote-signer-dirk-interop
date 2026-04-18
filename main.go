@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -208,7 +209,7 @@ func startTracing(ctx context.Context, cfg *config.Config) error {
 		semconv.ServiceNameKey.String("remote-signer-dirk-interop"),
 		semconv.HostNameKey.String(hostname),
 		semconv.ServiceInstanceIDKey.String(serviceInstanceID),
-		semconv.ServiceVersionKey.String(version),
+		semconv.ServiceVersionKey.String(strings.TrimSpace(version)),
 	)
 
 	tp := trace.NewTracerProvider(trace.WithBatcher(exporter), trace.WithResource(rs))
