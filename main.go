@@ -41,6 +41,9 @@ func parseLogLevel(level string) slog.Level {
 }
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	cfgPath := flag.String("config", "config.yaml", "Path to config file")
 	flag.Parse()
 
@@ -74,6 +77,9 @@ func main() {
 		"port", cfg.ListenPort,
 		"dirk_endpoints", cfg.Dirk.Endpoints,
 		"dirk_wallet", cfg.Dirk.Wallet)
+	context.AfterFunc(ctx, func() {
+		log.Info("received signal, shutting down")
+	})
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.ListenAddress, cfg.ListenPort))
 	if err != nil {
@@ -186,12 +192,7 @@ func main() {
 		}),
 	}
 
-	// Trap sigterm to gracefully shutdown the server
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-signalChan
-		log.Info("received signal, shutting down")
+	context.AfterFunc(ctx, func() {
 		err := server.Shutdown(context.Background())
 		if err != nil {
 			log.Error("failed to shutdown server", "error", err)
@@ -203,10 +204,7 @@ func main() {
 				log.Error("failed to shutdown metrics server", "error", err)
 			}
 		}
-
-		// Restore sigterm handler
-		signal.Reset(os.Interrupt, syscall.SIGTERM)
-	}()
+	})
 
 	if metricsServer != nil {
 		go func() {
