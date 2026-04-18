@@ -40,44 +40,73 @@ func parseLogLevel(level string) slog.Level {
 	return slog.LevelInfo
 }
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+func startDirkSigner(ctx context.Context, cfg *config.Config, log *slog.Logger) (*dirksigner.DirkSigner, error) {
+	var err error
 
-	cfgPath := flag.String("config", "config.yaml", "Path to config file")
-	flag.Parse()
-
-	if *cfgPath == "" {
-		fmt.Fprintf(os.Stderr, "config file is required\n")
-		fmt.Fprintln(os.Stderr)
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	cfg, err := config.Load(*cfgPath, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
-		os.Exit(1)
-	}
-
-	var log *slog.Logger
-	logLevel := parseLogLevel(cfg.LogLevel)
-	if cfg.LogFormat == "json" {
-		log = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-			Level: logLevel,
-		}))
+	// Read CA into memory
+	var rootCA *x509.CertPool
+	if cfg.SSL.RootCA != "" {
+		rootCABytes, err := os.ReadFile(cfg.SSL.RootCA)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read root CA: %w", err)
+		}
+		rootCA = x509.NewCertPool()
+		rootCA.AppendCertsFromPEM(rootCABytes)
 	} else {
-		log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-			Level: logLevel,
-		}))
+		rootCA, err = x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get system cert pool: %w", err)
+		}
 	}
+
+	tlsProvider := tlsprovider.NewTLSProvider(cfg.SSL.Cert, cfg.SSL.PrivKey)
+	tlsProvider.SetThreshold(cfg.SSL.RefreshThreshold)
+	tlsProvider.SetRetry(cfg.SSL.RefreshRetry)
+	tlsProvider.SetLogger(log)
+	// Load the certificate synchronously to make sure
+	// it's valid on startup.
+	if err := tlsProvider.LoadCertificate(); err != nil {
+		return nil, fmt.Errorf("failed to load certificate: %w", err)
+	}
+
+	dirkEndpoints := make([]*e2wd.Endpoint, len(cfg.Dirk.Endpoints))
+	for i, endpoint := range cfg.Dirk.Endpoints {
+		host, portStr, err := net.SplitHostPort(endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("failed to split host port: %w", err)
+		}
+		port, err := strconv.ParseUint(portStr, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert port to int: %w", err)
+		}
+		dirkEndpoints[i] = e2wd.NewEndpoint(host, uint32(port))
+	}
+
+	dirkSigner := &dirksigner.DirkSigner{
+		GenesisForkVersion: domains.ForkVersion(cfg.GenesisForkVersion()),
+		RootCA:             rootCA,
+	}
+
+	dirkSigner.SetLogger(log)
+	ctx, cancel := context.WithTimeout(ctx, cfg.Dirk.Timeout)
+	defer cancel()
+
+	err = dirkSigner.Open(ctx, cfg.Dirk.Wallet, dirkEndpoints, tlsProvider, parseLogLevel(cfg.LogLevel))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open dirk signer: %w", err)
+	}
+
+	return dirkSigner, nil
+}
+
+func startHttp(ctx context.Context, service api.ServerInterface, cfg *config.Config, log *slog.Logger) error {
 
 	log.Info("listening",
 		"address", cfg.ListenAddress,
 		"port", cfg.ListenPort,
 		"dirk_endpoints", cfg.Dirk.Endpoints,
 		"dirk_wallet", cfg.Dirk.Wallet)
-	context.AfterFunc(ctx, func() {
+	_ = context.AfterFunc(ctx, func() {
 		log.Info("received signal, shutting down")
 	})
 
@@ -89,73 +118,6 @@ func main() {
 	defer func() {
 		_ = listener.Close()
 	}()
-
-	// Read CA into memory
-	var rootCABytes []byte
-	var rootCA *x509.CertPool
-	if cfg.SSL.RootCA != "" {
-		rootCABytes, err = os.ReadFile(cfg.SSL.RootCA)
-		if err != nil {
-			log.Error("failed to read root CA", "error", err)
-			os.Exit(1)
-		}
-		rootCA = x509.NewCertPool()
-		rootCA.AppendCertsFromPEM(rootCABytes)
-	} else {
-		rootCA, err = x509.SystemCertPool()
-		if err != nil {
-			log.Error("failed to get system cert pool", "error", err)
-			os.Exit(1)
-		}
-	}
-
-	tlsProvider := tlsprovider.NewTLSProvider(cfg.SSL.Cert, cfg.SSL.PrivKey)
-	tlsProvider.SetThreshold(cfg.SSL.RefreshThreshold)
-	tlsProvider.SetRetry(cfg.SSL.RefreshRetry)
-	tlsProvider.SetLogger(log)
-	// Load the certificate synchronously to make sure
-	// it's valid on startup.
-	if err := tlsProvider.LoadCertificate(); err != nil {
-		log.Error("failed to load certificate", "error", err)
-		os.Exit(1)
-	}
-
-	dirkEndpoints := make([]*e2wd.Endpoint, len(cfg.Dirk.Endpoints))
-	for i, endpoint := range cfg.Dirk.Endpoints {
-		host, portStr, err := net.SplitHostPort(endpoint)
-		if err != nil {
-			log.Error("failed to split host port", "error", err)
-			os.Exit(1)
-		}
-		port, err := strconv.ParseUint(portStr, 10, 32)
-		if err != nil {
-			log.Error("failed to convert port to int", "error", err)
-			os.Exit(1)
-		}
-		dirkEndpoints[i] = e2wd.NewEndpoint(host, uint32(port))
-	}
-
-	dirkSigner := &dirksigner.DirkSigner{
-		GenesisForkVersion: domains.ForkVersion(cfg.GenesisForkVersion()),
-		RootCA:             rootCA,
-	}
-	dirkSigner.SetLogger(log)
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Dirk.Timeout)
-	defer cancel()
-	err = dirkSigner.Open(ctx, cfg.Dirk.Wallet, dirkEndpoints, tlsProvider, logLevel)
-	if err != nil {
-		log.Error("failed to open dirk signer", "error", err)
-		os.Exit(1)
-	}
-
-	service, err := service.NewService(dirkSigner)
-	if err != nil {
-		log.Error("failed to create service", "error", err)
-		os.Exit(1)
-	}
-
-	service.SetLogger(log)
-	service.SetTimeout(cfg.Dirk.Timeout)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthcheck", func(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +154,7 @@ func main() {
 		}),
 	}
 
-	context.AfterFunc(ctx, func() {
+	_ = context.AfterFunc(ctx, func() {
 		err := server.Shutdown(context.Background())
 		if err != nil {
 			log.Error("failed to shutdown server", "error", err)
@@ -219,6 +181,65 @@ func main() {
 		}()
 	}
 
+	err = server.Serve(listener)
+	if err == http.ErrServerClosed {
+		log.Info("server closed")
+		return nil
+	}
+	if err != nil {
+		log.Error("failed to serve", "error", err)
+		return fmt.Errorf("failed to serve: %w", err)
+	}
+	return nil
+}
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cfgPath := flag.String("config", "config.yaml", "Path to config file")
+	flag.Parse()
+
+	if *cfgPath == "" {
+		fmt.Fprintf(os.Stderr, "config file is required\n")
+		fmt.Fprintln(os.Stderr)
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	cfg, err := config.Load(*cfgPath, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	var log *slog.Logger
+	logLevel := parseLogLevel(cfg.LogLevel)
+	if cfg.LogFormat == "json" {
+		log = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			Level: logLevel,
+		}))
+	} else {
+		log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: logLevel,
+		}))
+	}
+
+	dirkSigner, err := startDirkSigner(ctx, cfg, log)
+	if err != nil {
+		log.Error("failed to start dirk signer", "error", err)
+		os.Exit(1)
+	}
+
+	service, err := service.NewService(dirkSigner)
+	if err != nil {
+		log.Error("failed to create service", "error", err)
+		os.Exit(1)
+	}
+
+	service.SetLogger(log)
+	service.SetTimeout(cfg.Dirk.Timeout)
+
 	prometheus.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "remote_signer_dirk_interop_up",
 		Help: "Indicates if the remote signer dirk interop is up",
@@ -233,13 +254,9 @@ func main() {
 	startTimeGauge.Set(float64(time.Now().Unix()))
 	prometheus.MustRegister(startTimeGauge)
 
-	err = server.Serve(listener)
-	if err == http.ErrServerClosed {
-		log.Info("server closed")
-		return
-	}
+	err = startHttp(ctx, service, cfg, log)
 	if err != nil {
-		log.Error("failed to serve", "error", err)
+		log.Error("failed to start http", "error", err)
 		os.Exit(1)
 	}
 }
