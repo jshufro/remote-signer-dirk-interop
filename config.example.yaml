@@ -23,6 +23,18 @@ ssl:
   # Optional: root CA for verifying Dirk servers (omit to use system pool)
   root_ca: "/path/to/ca.crt"
 
+# Optional: otlp trace recipient config
+otlp:
+  trace_recipient: "localhost:4317"
+  # Whether to use TLS for the trace recipient
+  # Defaults to true
+  secure: true
+  # Optional: hostname override for the trace recipient
+  # Defaults to the hostname of the machine
+  hostname_override: "my-machine"
+  # Optional: service instance ID override for the trace recipient
+  # Defaults to the hostname
+  service_instance_id_override: "my-service"
 # Optional: network is either mainnet, holesky, hoodi, or sepolia
 # Alternatively, set network to a 0x-prefixed hex string representing the genesis fork version
 # of your custom network (e.g. 0x10000910 would be hoodi)

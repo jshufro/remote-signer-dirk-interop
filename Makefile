@@ -64,3 +64,13 @@ clean:
 	docker rmi remote-signer-dirk-interop-dependencies
 	rm -f remote-signer-dirk-interop
 	rm -f coverage.out
+
+.PHONY: release
+release: version.txt
+	docker build . -t ghcr.io/jshufro/remote-signer-dirk-interop:$(shell cat version.txt)
+	docker push ghcr.io/jshufro/remote-signer-dirk-interop:$(shell cat version.txt)
+
+.PHONY: release-latest
+release-latest:
+	docker tag ghcr.io/jshufro/remote-signer-dirk-interop:$(shell cat version.txt) ghcr.io/jshufro/remote-signer-dirk-interop:latest
+	docker push ghcr.io/jshufro/remote-signer-dirk-interop:latest
