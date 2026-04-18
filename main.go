@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"crypto/x509"
+	"crypto/tls"
+	_ "embed"
 	"flag"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -19,53 +19,21 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/dirksigner"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/domains"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/service"
-	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	e2wd "github.com/wealdtech/go-eth2-wallet-dirk"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"google.golang.org/grpc/credentials"
 )
 
-func parseLogLevel(level string) slog.Level {
-	switch level {
-	case "debug":
-		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	}
-	fmt.Fprintf(os.Stderr, "invalid log level %s, defaulting to info\n", level)
-	return slog.LevelInfo
-}
-
-func startDirkSigner(ctx context.Context, cfg *config.Config, log *slog.Logger) (*dirksigner.DirkSigner, error) {
+func startDirkSigner(ctx context.Context, cfg *config.Config) (*dirksigner.DirkSigner, error) {
 	var err error
-
-	// Read CA into memory
-	rootCA, err := x509.SystemCertPool()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get system cert pool: %w", err)
-	}
-
-	if cfg.SSL.RootCA != "" {
-		rootCABytes, err := os.ReadFile(cfg.SSL.RootCA)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read root CA: %w", err)
-		}
-		rootCA.AppendCertsFromPEM(rootCABytes)
-	}
-
-	tlsProvider := tlsprovider.NewTLSProvider(cfg.SSL.Cert, cfg.SSL.PrivKey)
-	tlsProvider.SetThreshold(cfg.SSL.RefreshThreshold)
-	tlsProvider.SetRetry(cfg.SSL.RefreshRetry)
-	tlsProvider.SetLogger(log)
-	// Load the certificate synchronously to make sure
-	// it's valid on startup.
-	if err := tlsProvider.LoadCertificate(); err != nil {
-		return nil, fmt.Errorf("failed to load certificate: %w", err)
-	}
 
 	dirkEndpoints := make([]*e2wd.Endpoint, len(cfg.Dirk.Endpoints))
 	for i, endpoint := range cfg.Dirk.Endpoints {
@@ -82,14 +50,14 @@ func startDirkSigner(ctx context.Context, cfg *config.Config, log *slog.Logger) 
 
 	dirkSigner := &dirksigner.DirkSigner{
 		GenesisForkVersion: domains.ForkVersion(cfg.GenesisForkVersion()),
-		RootCA:             rootCA,
+		RootCA:             cfg.SSL.CertPool,
 	}
 
-	dirkSigner.SetLogger(log)
+	dirkSigner.SetLogger(cfg.Log)
 	ctx, cancel := context.WithTimeout(ctx, cfg.Dirk.Timeout)
 	defer cancel()
 
-	err = dirkSigner.Open(ctx, cfg.Dirk.Wallet, dirkEndpoints, tlsProvider, parseLogLevel(cfg.LogLevel))
+	err = dirkSigner.Open(ctx, cfg.Dirk.Wallet, dirkEndpoints, cfg.SSL.TLSProvider, cfg.ParsedLogLevel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open dirk signer: %w", err)
 	}
@@ -97,20 +65,20 @@ func startDirkSigner(ctx context.Context, cfg *config.Config, log *slog.Logger) 
 	return dirkSigner, nil
 }
 
-func startHttp(ctx context.Context, service api.ServerInterface, cfg *config.Config, log *slog.Logger) error {
+func startHttp(ctx context.Context, service api.ServerInterface, cfg *config.Config) error {
 
-	log.Info("listening",
+	cfg.Log.Info("listening",
 		"address", cfg.ListenAddress,
 		"port", cfg.ListenPort,
 		"dirk_endpoints", cfg.Dirk.Endpoints,
 		"dirk_wallet", cfg.Dirk.Wallet)
 	_ = context.AfterFunc(ctx, func() {
-		log.Info("received signal, shutting down")
+		cfg.Log.Info("received signal, shutting down")
 	})
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.ListenAddress, cfg.ListenPort))
 	if err != nil {
-		log.Error("failed to listen", "error", err)
+		cfg.Log.Error("failed to listen", "error", err)
 		os.Exit(1)
 	}
 	defer func() {
@@ -122,7 +90,7 @@ func startHttp(ctx context.Context, service api.ServerInterface, cfg *config.Con
 		w.WriteHeader(http.StatusOK)
 		n, err := w.Write([]byte("{\"status\":\"UP\",\"outcome\":\"UP\",\"checks\":[]}"))
 		if err != nil {
-			log.Error("failed to write healthcheck response", "error", err, "bytes_written", n)
+			cfg.Log.Error("failed to write healthcheck response", "error", err, "bytes_written", n)
 		}
 	})
 
@@ -133,7 +101,7 @@ func startHttp(ctx context.Context, service api.ServerInterface, cfg *config.Con
 	} else if cfg.Metrics.ListenPort != 0 {
 		metricsListener, err = net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Metrics.ListenAddress, cfg.Metrics.ListenPort))
 		if err != nil {
-			log.Error("failed to listen for metrics", "error", err)
+			cfg.Log.Error("failed to listen for metrics", "error", err)
 			os.Exit(1)
 		}
 		defer func() {
@@ -155,13 +123,13 @@ func startHttp(ctx context.Context, service api.ServerInterface, cfg *config.Con
 	_ = context.AfterFunc(ctx, func() {
 		err := server.Shutdown(context.Background())
 		if err != nil {
-			log.Error("failed to shutdown server", "error", err)
+			cfg.Log.Error("failed to shutdown server", "error", err)
 		}
 
 		if metricsServer != nil {
 			err = metricsServer.Shutdown(context.Background())
 			if err != nil {
-				log.Error("failed to shutdown metrics server", "error", err)
+				cfg.Log.Error("failed to shutdown metrics server", "error", err)
 			}
 		}
 	})
@@ -170,24 +138,99 @@ func startHttp(ctx context.Context, service api.ServerInterface, cfg *config.Con
 		go func() {
 			err = metricsServer.Serve(metricsListener)
 			if err != http.ErrServerClosed && err != nil {
-				log.Error("failed to serve metrics", "error", err)
+				cfg.Log.Error("failed to serve metrics", "error", err)
 				os.Exit(1)
 			}
 			if err == http.ErrServerClosed {
-				log.Info("metrics server closed")
+				cfg.Log.Info("metrics server closed")
 			}
 		}()
 	}
 
 	err = server.Serve(listener)
 	if err == http.ErrServerClosed {
-		log.Info("server closed")
+		cfg.Log.Info("server closed")
 		return nil
 	}
 	if err != nil {
-		log.Error("failed to serve", "error", err)
+		cfg.Log.Error("failed to serve", "error", err)
 		return fmt.Errorf("failed to serve: %w", err)
 	}
+	return nil
+}
+
+//go:embed version.txt
+var version string
+
+func startTracing(ctx context.Context, cfg *config.Config) error {
+	if cfg.OTLP.TraceRecipient == "" {
+		return nil
+	}
+	opts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(cfg.OTLP.TraceRecipient),
+	}
+	if cfg.OTLP.Secure {
+		tlsConfig := &tls.Config{
+			GetClientCertificate: cfg.SSL.TLSProvider.GetClientCertificate,
+			RootCAs:              cfg.SSL.CertPool,
+		}
+		credentials := credentials.NewTLS(tlsConfig)
+		opts = append(opts, otlptracegrpc.WithTLSCredentials(credentials))
+	} else {
+		opts = append(opts, otlptracegrpc.WithInsecure())
+	}
+	client := otlptracegrpc.NewClient(opts...)
+	exporter, err := otlptrace.New(ctx, client)
+	if err != nil {
+		return fmt.Errorf("failed to create otlp trace exporter: %w", err)
+	}
+
+	var hostname string
+	if cfg.OTLP.HostnameOverride != "" {
+		hostname = cfg.OTLP.HostnameOverride
+	} else {
+		hostname, err = os.Hostname()
+		if err != nil {
+			cfg.Log.Error("failed to get hostname", "error", err)
+			hostname = "unknown"
+		}
+	}
+
+	var serviceInstanceID string
+	if cfg.OTLP.ServiceInstanceIDOverride != "" {
+		serviceInstanceID = cfg.OTLP.ServiceInstanceIDOverride
+	} else {
+		serviceInstanceID = hostname
+	}
+
+	rs := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceNameKey.String("remote-signer-dirk-interop"),
+		semconv.HostNameKey.String(hostname),
+		semconv.ServiceInstanceIDKey.String(serviceInstanceID),
+		semconv.ServiceVersionKey.String(version),
+	)
+
+	tp := trace.NewTracerProvider(trace.WithBatcher(exporter), trace.WithResource(rs))
+
+	// Set as the global default trace provider
+	otel.SetTracerProvider(tp)
+
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	context.AfterFunc(ctx, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := tp.Shutdown(ctx)
+		if err != nil {
+			cfg.Log.Error("failed to shutdown tracing", "error", err)
+		}
+		cfg.Log.Debug("tracing shutdown completed")
+	})
+
 	return nil
 }
 
@@ -211,31 +254,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	var log *slog.Logger
-	logLevel := parseLogLevel(cfg.LogLevel)
-	if cfg.LogFormat == "json" {
-		log = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-			Level: logLevel,
-		}))
-	} else {
-		log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-			Level: logLevel,
-		}))
+	err = startTracing(ctx, cfg)
+	if err != nil {
+		cfg.Log.Error("failed to start tracing", "error", err)
+		os.Exit(1)
 	}
 
-	dirkSigner, err := startDirkSigner(ctx, cfg, log)
+	dirkSigner, err := startDirkSigner(ctx, cfg)
 	if err != nil {
-		log.Error("failed to start dirk signer", "error", err)
+		cfg.Log.Error("failed to start dirk signer", "error", err)
 		os.Exit(1)
 	}
 
 	service, err := service.NewService(dirkSigner)
 	if err != nil {
-		log.Error("failed to create service", "error", err)
+		cfg.Log.Error("failed to create service", "error", err)
 		os.Exit(1)
 	}
 
-	service.SetLogger(log)
+	service.SetLogger(cfg.Log)
 	service.SetTimeout(cfg.Dirk.Timeout)
 
 	prometheus.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
@@ -252,9 +289,9 @@ func main() {
 	startTimeGauge.Set(float64(time.Now().Unix()))
 	prometheus.MustRegister(startTimeGauge)
 
-	err = startHttp(ctx, service, cfg, log)
+	err = startHttp(ctx, service, cfg)
 	if err != nil {
-		log.Error("failed to start http", "error", err)
+		cfg.Log.Error("failed to start http", "error", err)
 		os.Exit(1)
 	}
 }

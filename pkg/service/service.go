@@ -19,6 +19,10 @@ import (
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/fork"
 	"github.com/jshufro/remote-signer-dirk-interop/pkg/signer"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Service[AccountType any] struct {
@@ -82,10 +86,22 @@ func (s *Service[AccountType]) SetTimeout(timeout time.Duration) {
 	s.timeout = timeout
 }
 
+func (s *Service[AccountType]) timeoutContext(r *http.Request) (context.Context, context.CancelFunc) {
+	if s.timeout > 0 {
+		return context.WithTimeout(r.Context(), s.timeout)
+	}
+	return r.Context(), func() {}
+}
+
 func (s *Service[AccountType]) PUBLICKEYLIST(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.timeoutContext(r)
+	defer cancel()
+
+	ctx, span := otel.Tracer("remote-signer-dirk-interop").Start(ctx, "PUBLICKEYLIST")
+	defer span.End()
+
 	s.log.Info("PUBLICKEYLIST request", "path", r.URL.Path)
 	publicKeysRequestsCounter.Inc()
-	ctx := r.Context()
 	if s.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, s.timeout)
@@ -95,6 +111,8 @@ func (s *Service[AccountType]) PUBLICKEYLIST(w http.ResponseWriter, r *http.Requ
 	keys, err := s.signer.GetPublicKeys(ctx)
 	if err != nil {
 		s.log.Error("failed to get public keys", "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		statusCode := s.writeErrorJSON(w, err)
 		publicKeysResponseCounts.WithLabelValues(strconv.Itoa(statusCode)).Inc()
 		return
@@ -106,6 +124,7 @@ func (s *Service[AccountType]) PUBLICKEYLIST(w http.ResponseWriter, r *http.Requ
 	}
 	s.writeJSON(w, http.StatusOK, resp)
 	publicKeysResponseCounts.WithLabelValues("200").Inc()
+	span.SetStatus(codes.Ok, "OK")
 }
 
 type GenericBody struct {
@@ -114,6 +133,9 @@ type GenericBody struct {
 }
 
 func (s *Service[AccountType]) getSignature(ctx context.Context, account AccountType, signable any, typeName string, forkInfo *fork.ForkInfo) ([96]byte, error) {
+	ctx, span := otel.Tracer("remote-signer-dirk-interop").Start(ctx, "getSignature",
+		trace.WithAttributes(attribute.String("signable_type", typeName)))
+	defer span.End()
 
 	// Start the signing duration timer
 	signingDurationTimer := prometheus.NewTimer(signDurationHistogramVec.WithLabelValues(typeName))
@@ -129,15 +151,11 @@ func (s *Service[AccountType]) getSignature(ctx context.Context, account Account
 }
 
 func (s *Service[AccountType]) writeSignatureResponse(w http.ResponseWriter, acceptHeader string, signature [96]byte) {
+
 	signatureString := "0x" + hex.EncodeToString(signature[:])
 	// If the request is for a text/plain response, write the signature directly
 	if acceptHeader == "text/plain" {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(signatureString))
-		if err != nil {
-			s.log.Error("failed to write signature", "error", err)
-		}
+		s.writeTextPlain(w, http.StatusOK, signatureString)
 		return
 	}
 
@@ -149,20 +167,23 @@ func (s *Service[AccountType]) writeSignatureResponse(w http.ResponseWriter, acc
 }
 
 func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, identifier string) {
+	ctx, cancel := s.timeoutContext(r)
+	defer cancel()
+
+	ctx, span := otel.Tracer("remote-signer-dirk-interop").Start(ctx, "SIGN")
+	defer span.End()
+
 	s.log.Info("SIGN request", "path", r.URL.Path, "identifier", identifier)
-	ctx := r.Context()
-	if s.timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, s.timeout)
-		defer cancel()
-	}
 
 	// Create a public key from the identifier
 	identifier = strings.TrimPrefix(identifier, "0x")
 	pubkeySlice, err := hex.DecodeString(identifier)
 	if err != nil || len(pubkeySlice) != 48 {
 		s.log.Error("failed to decode public key", "error", err)
-		statusCode := s.writeErrorJSON(w, errors.BadRequest("invalid identifier; expected 0x-prefixed 48-byte compressed BLS public key: %w", err))
+		err = errors.BadRequest("invalid identifier; expected 0x-prefixed 48-byte compressed BLS public key: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		statusCode := s.writeErrorJSON(w, err)
 		signRequestsCounter.WithLabelValues("UNKNOWN").Inc()
 		signResponseCounts.WithLabelValues("UNKNOWN", strconv.Itoa(statusCode)).Inc()
 		return
@@ -171,6 +192,8 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 	account, err := s.signer.GetAccountForPubkey(ctx, pubkey)
 	if err != nil {
 		s.log.Error("failed to get account for pubkey", "error", err, "pubkey", identifier)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		statusCode := s.writeErrorJSON(w, err)
 		signRequestsCounter.WithLabelValues("UNKNOWN").Inc()
 		signResponseCounts.WithLabelValues("UNKNOWN", strconv.Itoa(statusCode)).Inc()
@@ -186,7 +209,10 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 	err = json.NewDecoder(teeReader).Decode(&genericBody)
 	if err != nil {
 		s.log.Error("failed to decode request body", "error", err)
-		statusCode := s.writeErrorJSON(w, errors.BadRequest("failed to decode request body: %w", err))
+		err = errors.BadRequest("failed to decode request body: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		statusCode := s.writeErrorJSON(w, err)
 		signRequestsCounter.WithLabelValues("UNKNOWN").Inc()
 		signResponseCounts.WithLabelValues("UNKNOWN", strconv.Itoa(statusCode)).Inc()
 		return
@@ -198,7 +224,10 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 	signable, err := generated.StringToSignableType(genericBody.Type)
 	if err != nil {
 		s.log.Error("failed to get signable type", "error", err)
-		statusCode := s.writeErrorJSON(w, errors.BadRequest("unknown signing type: %w", err))
+		err = errors.BadRequest("unknown signing type: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		statusCode := s.writeErrorJSON(w, err)
 		signResponseCounts.WithLabelValues(genericBody.Type, strconv.Itoa(statusCode)).Inc()
 		return
 	}
@@ -209,7 +238,10 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 	err = json.NewDecoder(bodyCopy).Decode(signable)
 	if err != nil {
 		s.log.Error("failed to unmarshal request body", "error", err)
-		statusCode := s.writeErrorJSON(w, errors.BadRequest("failed to unmarshal request body: %w", err))
+		err = errors.BadRequest("failed to unmarshal request body: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		statusCode := s.writeErrorJSON(w, err)
 		signResponseCounts.WithLabelValues(genericBody.Type, strconv.Itoa(statusCode)).Inc()
 		return
 	}
@@ -217,18 +249,32 @@ func (s *Service[AccountType]) SIGN(w http.ResponseWriter, r *http.Request, iden
 	signature, err := s.getSignature(ctx, account, signable, genericBody.Type, genericBody.ForkInfo)
 	if err != nil {
 		s.log.Error("failed to get signature", "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		statusCode := s.writeErrorJSON(w, err)
 		signResponseCounts.WithLabelValues(genericBody.Type, strconv.Itoa(statusCode)).Inc()
 		return
 	}
 
 	signResponseCounts.WithLabelValues(genericBody.Type, "200").Inc()
+	span.SetStatus(codes.Ok, "OK")
 	s.writeSignatureResponse(w, r.Header.Get("Accept"), signature)
 
 }
 
+func (s *Service[AccountType]) writeTextPlain(w http.ResponseWriter, status int, signature string) {
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(status)
+	_, err := w.Write([]byte(signature))
+	if err != nil {
+		s.log.Error("failed to write signature", "error", err)
+	}
+}
+
 // writeJSON serializes v as JSON and writes it with the given status code.
 func (s *Service[AccountType]) writeJSON(w http.ResponseWriter, status int, v any) {
+
 	if v == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)

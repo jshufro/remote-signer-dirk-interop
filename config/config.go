@@ -1,13 +1,18 @@
 package config
 
 import (
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
+
+	tlsprovider "github.com/jshufro/remote-signer-dirk-interop/pkg/tls"
 )
 
 // Config holds application configuration.
@@ -30,7 +35,17 @@ type Config struct {
 		RootCA           string        `mapstructure:"root_ca"` // optional
 		RefreshThreshold time.Duration `mapstructure:"refresh_threshold"`
 		RefreshRetry     time.Duration `mapstructure:"refresh_retry"`
+
+		CertPool    *x509.CertPool          `mapstructure:"-"`
+		TLSProvider tlsprovider.TLSProvider `mapstructure:"-"`
 	}
+
+	OTLP struct {
+		TraceRecipient            string `mapstructure:"trace_recipient"`
+		Secure                    bool   `mapstructure:"secure"`
+		HostnameOverride          string `mapstructure:"hostname_override"`
+		ServiceInstanceIDOverride string `mapstructure:"service_instance_id_override"`
+	} `mapstructure:"otlp"`
 
 	Metrics struct {
 		ListenAddress string `mapstructure:"listen_address"`
@@ -40,12 +55,57 @@ type Config struct {
 	// Network is either mainnet or hoodi
 	Network            string `mapstructure:"network"`
 	genesisForkVersion []byte
+
+	Log            *slog.Logger
+	ParsedLogLevel slog.Level
 }
 
-func (c *Config) Populate(v *viper.Viper) error {
-	if err := v.Unmarshal(c); err != nil {
+func (c *Config) populate(v *viper.Viper) error {
+	if c == nil {
+		return fmt.Errorf("unmarshaling config: nil config")
+	}
+	err := v.Unmarshal(c)
+	if err != nil {
 		return fmt.Errorf("unmarshaling config: %w", err)
 	}
+
+	c.SSL.CertPool, err = x509.SystemCertPool()
+	if err != nil {
+		return fmt.Errorf("failed to get system cert pool: %w", err)
+	}
+
+	if c.SSL.RootCA != "" {
+		rootCABytes, err := os.ReadFile(c.SSL.RootCA)
+		if err != nil {
+			return fmt.Errorf("failed to read root CA: %w", err)
+		}
+		c.SSL.CertPool.AppendCertsFromPEM(rootCABytes)
+	}
+
+	c.ParsedLogLevel = parseLogLevel(c.LogLevel)
+	if c.LogFormat == "json" {
+		c.Log = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			Level: c.ParsedLogLevel,
+		}))
+	} else {
+		c.Log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: c.ParsedLogLevel,
+		}))
+	}
+
+	return nil
+}
+
+func (c *Config) initClientTLS() error {
+	tlsProvider := tlsprovider.NewTLSProvider(c.SSL.Cert, c.SSL.PrivKey)
+	tlsProvider.SetThreshold(c.SSL.RefreshThreshold)
+	tlsProvider.SetRetry(c.SSL.RefreshRetry)
+	tlsProvider.SetLogger(c.Log)
+
+	if err := tlsProvider.LoadCertificate(); err != nil {
+		return fmt.Errorf("failed to load certificate: %w", err)
+	}
+	c.SSL.TLSProvider = tlsProvider
 	return nil
 }
 
@@ -62,6 +122,7 @@ func newViper(fs afero.Fs) *viper.Viper {
 	v.SetDefault("listen_address", "0.0.0.0")
 	v.SetDefault("listen_port", 9090)
 	v.SetDefault("network", "mainnet")
+	v.SetDefault("otlp.secure", true)
 	return v
 
 }
@@ -78,12 +139,16 @@ func Load(cfgFile string, fs afero.Fs) (*Config, error) {
 	}
 
 	cfg := &Config{}
-	if err := cfg.Populate(v); err != nil {
+	if err := cfg.populate(v); err != nil {
 		return nil, fmt.Errorf("populating config: %w", err)
 	}
 
-	if err := cfg.Validate(); err != nil {
+	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("validating config: %w", err)
+	}
+
+	if err := cfg.initClientTLS(); err != nil {
+		return nil, fmt.Errorf("loading tls credentials: %w", err)
 	}
 
 	return cfg, nil
@@ -91,7 +156,7 @@ func Load(cfgFile string, fs afero.Fs) (*Config, error) {
 
 // Validate performs basic validation of the configuration and returns an error
 // if any required fields are missing or invalid.
-func (c *Config) Validate() error {
+func (c *Config) validate() error {
 	if len(c.Dirk.Endpoints) == 0 {
 		return fmt.Errorf("at least one dirk endpoint is required")
 	}
@@ -141,4 +206,19 @@ func (c *Config) setGenesisForkVersion() error {
 
 func (c *Config) GenesisForkVersion() []byte {
 	return c.genesisForkVersion
+}
+
+func parseLogLevel(level string) slog.Level {
+	switch level {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	}
+	fmt.Fprintf(os.Stderr, "invalid log level %s, defaulting to info\n", level)
+	return slog.LevelInfo
 }

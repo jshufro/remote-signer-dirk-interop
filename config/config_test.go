@@ -1,9 +1,19 @@
 package config
 
 import (
+	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	_ "embed"
+	"encoding/pem"
+	"errors"
+	"math/big"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/afero"
 )
@@ -54,6 +64,101 @@ func TestGenesisForkVersionInvalidNetwork(t *testing.T) {
 //go:embed test/valid_config.yaml
 var validConfig string
 
+func testCertKeyPaths(t *testing.T) (certPath, keyPath string) {
+	t.Helper()
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("create cert: %v", err)
+	}
+	var certBuf bytes.Buffer
+	if err := pem.Encode(&certBuf, &pem.Block{Type: "CERTIFICATE", Bytes: der}); err != nil {
+		t.Fatalf("encode cert: %v", err)
+	}
+	var keyBuf bytes.Buffer
+	if err := pem.Encode(&keyBuf, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)}); err != nil {
+		t.Fatalf("encode key: %v", err)
+	}
+	dir := t.TempDir()
+	certPath = filepath.Join(dir, "server.crt")
+	keyPath = filepath.Join(dir, "server.key")
+	if err := os.WriteFile(certPath, certBuf.Bytes(), 0o600); err != nil {
+		t.Fatalf("write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, keyBuf.Bytes(), 0o600); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+	return certPath, keyPath
+}
+
+// testRootCAPath writes a self-signed CA certificate PEM and returns its path.
+func testRootCAPath(t *testing.T) string {
+	t.Helper()
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("create cert: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := pem.Encode(&buf, &pem.Block{Type: "CERTIFICATE", Bytes: der}); err != nil {
+		t.Fatalf("encode cert: %v", err)
+	}
+	p := filepath.Join(t.TempDir(), "root.pem")
+	if err := os.WriteFile(p, buf.Bytes(), 0o600); err != nil {
+		t.Fatalf("write root CA: %v", err)
+	}
+	return p
+}
+
+func TestLoadConfigWithRootCA(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	configFile := "test.yaml"
+
+	certPath, keyPath := testCertKeyPaths(t)
+	rootPath := testRootCAPath(t)
+	yamlBody := strings.ReplaceAll(validConfig, "/path/to/server.crt", certPath)
+	yamlBody = strings.ReplaceAll(yamlBody, "/path/to/server.key", keyPath)
+	yamlBody = strings.Replace(yamlBody,
+		"  privkey: \""+keyPath+"\"",
+		"  privkey: \""+keyPath+"\"\n  root_ca: \""+rootPath+"\"",
+		1)
+
+	f, err := fs.Create(configFile)
+	if err != nil {
+		t.Fatalf("Create(%q) error = %v", configFile, err)
+	}
+	if _, err := f.WriteString(yamlBody); err != nil {
+		t.Fatalf("WriteString error = %v", err)
+	}
+	_ = f.Close()
+
+	cfg, err := Load(configFile, fs)
+	if err != nil {
+		t.Fatalf("Load(%q) with root_ca error = %v", configFile, err)
+	}
+	if cfg.SSL.CertPool == nil {
+		t.Fatal("expected non-nil CertPool after loading root_ca")
+	}
+}
+
 func TestLoadConfig(t *testing.T) {
 	// Create a mock fs
 	fs := afero.NewMemMapFs()
@@ -61,14 +166,18 @@ func TestLoadConfig(t *testing.T) {
 	// Create a mock config file
 	configFile := "test.yaml"
 
+	certPath, keyPath := testCertKeyPaths(t)
+	yamlBody := strings.ReplaceAll(validConfig, "/path/to/server.crt", certPath)
+	yamlBody = strings.ReplaceAll(yamlBody, "/path/to/server.key", keyPath)
+
 	// Write the mock config file to the mock fs
 	f, err := fs.Create(configFile)
 	if err != nil {
 		t.Fatalf("Create(%q) error = %v", configFile, err)
 	}
-	_, err = f.WriteString(validConfig)
+	_, err = f.WriteString(yamlBody)
 	if err != nil {
-		t.Fatalf("WriteString(%q) error = %v", validConfig, err)
+		t.Fatalf("WriteString error = %v", err)
 	}
 	_ = f.Close()
 
@@ -78,7 +187,7 @@ func TestLoadConfig(t *testing.T) {
 		t.Fatalf("Load(%q) error = %v", configFile, err)
 	}
 
-	err = cfg.Validate()
+	err = cfg.validate()
 	if err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
@@ -99,12 +208,12 @@ func TestLoadConfig(t *testing.T) {
 func TestRequiredFields(t *testing.T) {
 	cfg := &Config{}
 	v := newViper(nil)
-	err := cfg.Populate(v)
+	err := cfg.populate(v)
 	if err != nil {
 		t.Fatalf("Populate(%v) error = %v", v, err)
 	}
 
-	err = cfg.Validate()
+	err = cfg.validate()
 	if err == nil {
 		t.Fatalf("expected error for missing required fields, got nil")
 	}
@@ -114,7 +223,7 @@ func TestRequiredFields(t *testing.T) {
 
 	// Add dirks
 	cfg.Dirk.Endpoints = []string{"dirk.example.com:9091"}
-	err = cfg.Validate()
+	err = cfg.validate()
 	if err == nil {
 		t.Fatalf("expected error for missing required fields, got nil")
 	}
@@ -124,7 +233,7 @@ func TestRequiredFields(t *testing.T) {
 
 	// Add wallet
 	cfg.Dirk.Wallet = "wallet-name"
-	err = cfg.Validate()
+	err = cfg.validate()
 	if err == nil {
 		t.Fatalf("expected error for missing required fields, got nil")
 	}
@@ -135,14 +244,14 @@ func TestRequiredFields(t *testing.T) {
 	// Add cert and privkey
 	cfg.SSL.Cert = "/path/to/server.crt"
 	cfg.SSL.PrivKey = "/path/to/server.key"
-	err = cfg.Validate()
+	err = cfg.validate()
 	if err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 
 	// Mangle genesis fork version to ensure it causes an error in Validate()
 	cfg.Network = "not valid"
-	err = cfg.Validate()
+	err = cfg.validate()
 	if err == nil {
 		t.Fatalf("expected error for invalid network, got nil")
 	}
@@ -154,11 +263,27 @@ func TestRequiredFields(t *testing.T) {
 func TestPopulateNilConfig(t *testing.T) {
 	var cfg *Config
 	v := newViper(nil)
-	err := cfg.Populate(v)
+	err := cfg.populate(v)
 	if err == nil {
 		t.Fatalf("expected error for nil config, got nil")
 	}
 	if !strings.Contains(err.Error(), "unmarshaling config") {
 		t.Fatalf("expected error for nil config, got %v", err)
+	}
+}
+
+func TestPopulateUnmarshalError(t *testing.T) {
+	cfg := &Config{}
+	v := newViper(nil)
+	v.Set("listen_port", "not-a-u16")
+	err := cfg.populate(v)
+	if err == nil {
+		t.Fatal("expected unmarshal error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unmarshaling config") {
+		t.Fatalf("expected unmarshaling config wrapper, got %v", err)
+	}
+	if errors.Unwrap(err) == nil {
+		t.Fatalf("expected wrapped decode error, got %v", err)
 	}
 }
