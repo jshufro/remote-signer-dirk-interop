@@ -48,6 +48,7 @@ jobs:
               done | sort -V | tail -1 || true
             )
           else
+            echo "Failed to get tags from GHCR: ${HTTP}"
             MAX_VER=""
           fi
 
