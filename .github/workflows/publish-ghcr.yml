@@ -36,20 +36,30 @@ jobs:
           FULL_IMAGE="ghcr.io/${IMAGE_LOWER}"
 
           # Tags already on GHCR (this push is not listed yet).
-          HTTP=$(curl -sS -o /tmp/ghcr-tags.json -w "%{http_code}" \
-            -u "${{ github.actor }}:${GITHUB_TOKEN}" \
-            "https://ghcr.io/v2/${IMAGE_LOWER}/tags/list?n=1000" || true)
-          if [ "${HTTP}" = "200" ] && [ -s /tmp/ghcr-tags.json ]; then
-            MAX_VER=$(
-              jq -r '(.tags // [])[]' /tmp/ghcr-tags.json | while read -r t; do
-                [[ "${t}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || continue
-                [ "${t}" = "latest" ] && continue
-                echo "${t#v}"
-              done | sort -V | tail -1 || true
-            )
-          else
-            echo "Failed to get tags from GHCR: ${HTTP}"
+          # Registry HTTP API expects a JWT from the token endpoint, not raw GITHUB_TOKEN on /v2/.../tags/list.
+          SCOPE="repository:${IMAGE_LOWER}:pull"
+          TOKEN_JSON=$(curl -sS -u "${{ github.actor }}:${GITHUB_TOKEN}" \
+            "https://ghcr.io/token?service=ghcr.io&scope=${SCOPE}" || true)
+          REGISTRY_TOKEN=$(echo "${TOKEN_JSON}" | jq -r '.token // empty' 2>/dev/null) || true
+          if [ -z "${REGISTRY_TOKEN}" ]; then
+            echo "Failed to get GHCR registry token (tags list skipped)"
             MAX_VER=""
+          else
+            HTTP=$(curl -sS -o /tmp/ghcr-tags.json -w "%{http_code}" \
+              -H "Authorization: Bearer ${REGISTRY_TOKEN}" \
+              "https://ghcr.io/v2/${IMAGE_LOWER}/tags/list?n=1000" || true)
+            if [ "${HTTP}" = "200" ] && [ -s /tmp/ghcr-tags.json ]; then
+              MAX_VER=$(
+                jq -r '(.tags // [])[]' /tmp/ghcr-tags.json | while read -r t; do
+                  [[ "${t}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || continue
+                  [ "${t}" = "latest" ] && continue
+                  echo "${t#v}"
+                done | sort -V | tail -1 || true
+              )
+            else
+              echo "Failed to get tags from GHCR: ${HTTP}"
+              MAX_VER=""
+            fi
           fi
 
           # Push :latest only when this release is strictly newer than the highest v* tag on GHCR.

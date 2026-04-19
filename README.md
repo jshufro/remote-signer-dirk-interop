@@ -8,6 +8,22 @@ Use it at your own risk.
 
 ---
 
+### Why?
+
+Dirk is a powerful distributed signer, but its bespoke gRPC API is only supported natively by [Vouch](https://github.com/attestantio/vouch).
+This project lets you use Dirk with any Validator Client that supports the remote-signer API, e.g., [Vero](https://github.com/serenita-org/vero)
+
+You may want to use this project if:
+1. You want to use a specific Validator Client with Dirk signers (other than Vouch).
+2. You want to use both Vero and Vouch with Dirk (with an appropriate Vouch multiinstance configuration).
+
+You should not use this project if:
+1. You simply want to use Vouch and Dirk.
+2. You want full DVT.
+3. You want to use Vero, but are happy with [Web3Signer](https://docs.web3signer.consensys.io/) instead of Dirk.
+
+---
+
 ### Configuration
 
 An example configuration file is provided in [config.example.yaml](config.example.yaml)
@@ -17,7 +33,8 @@ Run the program with `./remote-signer-dirk-interop -config path/to/config.yaml`.
 **Note:** The TLS/SSL configuration for this application only secures its communications with Dirk.
 **You are responsible for securing communication between the VC and the `listen_port` for this application.**
 
-An example docker-compose.yaml:
+#### Compose Example
+
 ```yaml
 services:
   remote-signer-dirk-interop:
@@ -58,21 +75,11 @@ configs:
       network: "mainnet"
 ```
 
----
+#### Monitoring
 
-### Why?
+A sample grafana dashboard can be found in the [grafana folder](./grafana).
 
-Dirk is a powerful distributed signer, but its bespoke gRPC API is only supported natively by [Vouch](https://github.com/attestantio/vouch).
-This project lets you use Dirk with any Validator Client that supports the remote-signer API, e.g., [Vero](https://github.com/serenita-org/vero)
-
-You may want to use this project if:
-1. You want to use a specific Validator Client with Dirk signers (other than Vouch).
-2. You want to use both Vero and Vouch with Dirk (with an appropriate Vouch multiinstance configuration).
-
-You should not use this project if:
-1. You simply want to use Vouch and Dirk.
-2. You want full DVT.
-3. You want to use Vero, but are happy with [Web3Signer](https://docs.web3signer.consensys.io/) instead of Dirk.
+Additionally, you can fill out the `otlp` section of the config to export traces to an otel compatible backend.
 
 ---
 
