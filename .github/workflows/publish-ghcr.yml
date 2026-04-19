@@ -37,7 +37,7 @@ jobs:
 
           # Tags already on GHCR (this push is not listed yet).
           HTTP=$(curl -sS -o /tmp/ghcr-tags.json -w "%{http_code}" \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -u "${{ github.actor }}:${GITHUB_TOKEN}" \
             "https://ghcr.io/v2/${IMAGE_LOWER}/tags/list?n=1000" || true)
           if [ "${HTTP}" = "200" ] && [ -s /tmp/ghcr-tags.json ]; then
             MAX_VER=$(
